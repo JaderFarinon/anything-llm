@@ -18,6 +18,7 @@ const { editMessage, sendFormattedMessage } = require("../utils");
 const { sendVoiceResponse } = require("../utils/media");
 const { safeJsonParse } = require("../../http");
 const { handleAgentResponse } = require("./agent");
+const { telegramSessionId } = require("../utils/access");
 
 /**
  * Check if the history is agentic by checking if any user messages start with "@agent"
@@ -37,7 +38,7 @@ function historyIsAgentic(chatMode, chatHistory) {
 /**
  * Stream a response to Telegram by running the full RAG pipeline.
  * Uses the same pipeline as the web UI (RAG, parsed docs, pinned docs, etc.)
- * and stores chats with thread_id so they appear in the AnythingLLM UI.
+ * and stores chats with thread_id so they appear in the AnyHealth UI.
  *
  * However, we are able to consistently handle agentic conversations in "chat" mode by checking the chat history
  * without needing to open/close an agent invocation every chat which is wasteful on the DB.
@@ -58,6 +59,7 @@ async function streamResponse({
   chatId = null,
   workspace = null,
   thread = null,
+  user = null,
   message = "",
   attachments = [],
   voiceResponse = false,
@@ -72,6 +74,8 @@ async function streamResponse({
   const { rawHistory, chatHistory } = await recentChatHistory({
     workspace,
     thread,
+    user,
+    apiSessionId: telegramSessionId(user),
     messageLimit,
   });
 
@@ -88,6 +92,7 @@ async function streamResponse({
       chatId,
       workspace,
       thread,
+      user,
       message,
       voiceResponse,
       attachments
@@ -137,7 +142,7 @@ async function streamResponse({
   const sources = [...pinnedSources, ...searchSources];
   const messages = await LLMConnector.compressMessages(
     {
-      systemPrompt: await chatPrompt(workspace),
+      systemPrompt: await chatPrompt(workspace, user),
       userPrompt: message,
       contextTexts,
       chatHistory,
@@ -159,6 +164,7 @@ async function streamResponse({
     await persistAndDeliver({
       workspace,
       thread,
+      user,
       message,
       completeText,
       sources,
@@ -311,6 +317,7 @@ async function generateResponse({
 async function persistAndDeliver({
   workspace,
   thread,
+  user,
   message,
   completeText,
   sources,
@@ -328,6 +335,8 @@ async function persistAndDeliver({
 
   await WorkspaceChats.new({
     workspaceId: workspace.id,
+    user,
+    apiSessionId: telegramSessionId(user),
     prompt: message,
     response: {
       text: completeText,

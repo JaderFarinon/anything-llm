@@ -1,6 +1,12 @@
 import React, { memo, useState } from "react";
 import useCopyText from "@/hooks/useCopyText";
-import { Check, ThumbsUp, ArrowsClockwise, Copy } from "@phosphor-icons/react";
+import {
+  Check,
+  ThumbsUp,
+  ThumbsDown,
+  ArrowsClockwise,
+  Copy,
+} from "@phosphor-icons/react";
 import Workspace from "@/models/workspace";
 import { EditMessageAction } from "./EditMessage";
 import RenderMetrics from "./RenderMetrics";
@@ -52,13 +58,22 @@ const Actions = ({
             />
           )}
           {chatId && role !== "user" && !isEditing && (
-            <FeedbackButton
-              isSelected={selectedFeedback === true}
-              handleFeedback={() => handleFeedback(true)}
-              tooltipId="feedback-button"
-              tooltipContent={t("chat_window.good_response")}
-              IconComponent={ThumbsUp}
-            />
+            <>
+              <FeedbackButton
+                isSelected={selectedFeedback === true}
+                handleFeedback={() => handleFeedback(true)}
+                tooltipId="feedback-button"
+                tooltipContent={t("chat_window.good_response")}
+                IconComponent={ThumbsUp}
+              />
+              <FeedbackButton
+                isSelected={selectedFeedback === false}
+                handleFeedback={() => handleFeedback(false)}
+                tooltipId="feedback-button"
+                tooltipContent="Resposta incorreta ou incompleta"
+                IconComponent={ThumbsDown}
+              />
+            </>
           )}
           <ActionMenu
             chatId={chatId}

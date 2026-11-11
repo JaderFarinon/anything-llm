@@ -70,6 +70,7 @@ model users {
   lastUpdatedAt                DateTime                      @default(now())
   dailyMessageLimit            Int?
   bio                          String?                       @default("")
+  telegramChatId               String?                       @unique
   web_push_subscription_config String?
   workspace_chats              workspace_chats[]
   workspace_users              workspace_users[]
@@ -87,6 +88,10 @@ model users {
   desktop_mobile_devices       desktop_mobile_devices[]
   workspace_parsed_files       workspace_parsed_files[]
   memories                     memories[]
+  telegram_link_tokens         telegram_link_tokens[]
+  companies                    user_companies[]
+  google_drive_connections     google_drive_connections[]
+  google_drive_oauth_states    google_drive_oauth_states[]
 }
 
 model recovery_codes {
@@ -149,6 +154,10 @@ model workspaces {
   prompt_history               prompt_history[]
   workspace_parsed_files       workspace_parsed_files[]
   memories                     memories[]
+  google_drive_file_indexes    google_drive_file_indexes[]
+  companyId                    Int?
+  company                      companies?                     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  privateOwnerId                Int?
 }
 
 model workspace_threads {
@@ -405,6 +414,7 @@ model scheduled_jobs {
   name      String
   prompt    String
   tools     String? // JSON array of tool identifiers (null = use all enabled agent skills)
+  telegramRecipientIds String? // JSON array of AnythingLLM user IDs receiving Telegram results
   schedule  String // Cron expression
   enabled   Boolean              @default(true)
   lastRunAt DateTime?
@@ -412,6 +422,18 @@ model scheduled_jobs {
   createdAt DateTime             @default(now())
   updatedAt DateTime             @default(now())
   runs      scheduled_job_runs[]
+}
+
+model telegram_link_tokens {
+  id        Int      @id @default(autoincrement())
+  tokenHash String   @unique
+  userId    Int
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model scheduled_job_runs {
@@ -485,4 +507,133 @@ model model_router_rules {
   @@unique([router_id, title])
   @@index([router_id])
   @@index([router_id, enabled, priority])
+}
+
+model companies {
+  id                       Int                        @id @default(autoincrement())
+  name                     String
+  slug                     String                     @unique
+  createdAt                DateTime                   @default(now())
+  lastUpdatedAt            DateTime                   @default(now())
+  members                  user_companies[]
+  workspaces               workspaces[]
+  google_drive_connections google_drive_connections[]
+}
+
+model user_companies {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  companyId Int
+  createdAt DateTime  @default(now())
+  user      users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   companies @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+  @@index([companyId])
+}
+
+model google_drive_connections {
+  id                       Int                     @id @default(autoincrement())
+  scope                    String
+  userId                   Int?
+  companyId                Int?
+  googleEmail              String?
+  refreshTokenEncrypted    String
+  pageToken                String?
+  syncRequested            Boolean                 @default(true)
+  channelId                String?                 @unique
+  channelTokenHash         String?
+  channelResourceId        String?
+  channelExpiration        DateTime?
+  lastSyncAt               DateTime?
+  lastError                String?
+  createdAt                DateTime                @default(now())
+  lastUpdatedAt            DateTime                @default(now())
+  user                     users?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company                  companies?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  folders                  google_drive_folders[]
+
+  @@unique([userId])
+  @@unique([companyId])
+  @@index([scope])
+}
+
+model google_drive_oauth_config {
+  id                    Int      @id @default(1)
+  clientId              String
+  clientSecretEncrypted String
+  baseUrl               String
+  createdAt             DateTime @default(now())
+  lastUpdatedAt         DateTime @default(now())
+}
+
+model google_drive_oauth_states {
+  id        Int      @id @default(autoincrement())
+  stateHash String   @unique
+  userId    Int
+  scope     String
+  companyId Int?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+model google_drive_folders {
+  id              Int                      @id @default(autoincrement())
+  connectionId    Int
+  driveFolderId   String
+  name            String
+  scope           String
+  status          String                   @default("pending")
+  addedByUserId   Int?
+  workspaceId     Int?
+  lastSyncAt      DateTime?
+  lastError       String?
+  createdAt       DateTime                 @default(now())
+  lastUpdatedAt   DateTime                 @default(now())
+  connection      google_drive_connections @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  files           google_drive_files[]
+
+  @@unique([connectionId, driveFolderId])
+  @@index([status, scope])
+  @@index([workspaceId])
+}
+
+model google_drive_files {
+  id             Int                  @id @default(autoincrement())
+  folderId       Int
+  driveFileId    String
+  name           String
+  mimeType       String
+  modifiedTime   String?
+  md5Checksum    String?
+  localPath      String?
+  docId          String?
+  status         String               @default("pending")
+  blocked        Boolean              @default(false)
+  lastError      String?
+  lastSyncedAt   DateTime?
+  createdAt      DateTime             @default(now())
+  lastUpdatedAt  DateTime             @default(now())
+  folder         google_drive_folders @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  indexes        google_drive_file_indexes[]
+
+  @@unique([folderId, driveFileId])
+  @@index([status])
+}
+
+model google_drive_file_indexes {
+  id            Int                @id @default(autoincrement())
+  driveFileId   Int
+  workspaceId   Int
+  docpath       String
+  docId         String?
+  lastUpdatedAt DateTime           @default(now())
+  driveFile     google_drive_files @relation(fields: [driveFileId], references: [id], onDelete: Cascade)
+  workspace     workspaces         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([driveFileId, workspaceId, docpath])
+  @@index([workspaceId])
 }

@@ -1,7 +1,8 @@
 const { ScheduledJob } = require("../models/scheduledJob");
 const { ScheduledJobRun } = require("../models/scheduledJobRun");
 const { validatedRequest } = require("../utils/middleware/validatedRequest");
-const { isSingleUserMode } = require("../utils/middleware/multiUserProtected");
+const { flexUserRoleValid, ROLES } = require("../utils/middleware/multiUserProtected");
+const { User } = require("../models/user");
 const { reqBody, safeJsonParse } = require("../utils/http");
 const { BackgroundService } = require("../utils/BackgroundWorkers");
 const { Telemetry } = require("../models/telemetry");
@@ -17,7 +18,7 @@ function scheduledJobEndpoints(app) {
   // List available tools for job configuration
   app.get(
     "/scheduled-jobs/available-tools",
-    [validatedRequest, isSingleUserMode],
+    [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (_request, response) => {
       try {
         const tools = await ScheduledJob.availableTools();
@@ -32,7 +33,7 @@ function scheduledJobEndpoints(app) {
   // Get a single run detail
   app.get(
     "/scheduled-jobs/runs/:runId",
-    [validatedRequest, isSingleUserMode],
+    [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (request, response) => {
       try {
         const run = await ScheduledJobRun.get({
@@ -62,7 +63,7 @@ function scheduledJobEndpoints(app) {
   // Mark a run as read or continue in thread, or kill a running or queued job run
   app.post(
     "/scheduled-jobs/runs/:runId/:action",
-    [validatedRequest, isSingleUserMode],
+    [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (request, response) => {
       try {
         const { action } = request.params;
@@ -114,7 +115,7 @@ function scheduledJobEndpoints(app) {
   // List all scheduled jobs
   app.get(
     "/scheduled-jobs",
-    [validatedRequest, isSingleUserMode],
+    [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (_request, response) => {
       try {
         const jobs = await ScheduledJob.where({}, null, null, {
@@ -140,10 +141,10 @@ function scheduledJobEndpoints(app) {
   // Create a new scheduled job
   app.post(
     "/scheduled-jobs/new",
-    [validatedRequest, isSingleUserMode],
+    [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (request, response) => {
       try {
-        const { name, prompt, tools, schedule } = reqBody(request);
+        const { name, prompt, tools, schedule, telegramRecipientIds = [] } = reqBody(request);
         let errorMessage = null;
 
         if (!name?.trim()) {
@@ -173,11 +174,14 @@ function scheduledJobEndpoints(app) {
           });
         }
 
+        const recipients = await validateTelegramRecipients(telegramRecipientIds);
+        if (recipients.error) return response.status(400).json({ job: null, error: recipients.error });
         const { job, error } = await ScheduledJob.create({
           name: name.trim(),
           prompt: prompt.trim(),
           tools: tools || null,
           schedule: schedule.trim(),
+          telegramRecipientIds: recipients.ids,
         });
 
         if (error) {
@@ -197,7 +201,7 @@ function scheduledJobEndpoints(app) {
   // Get a single scheduled job
   app.get(
     "/scheduled-jobs/:id",
-    [validatedRequest, isSingleUserMode],
+    [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (request, response) => {
       try {
         const job = await ScheduledJob.get({
@@ -219,13 +223,18 @@ function scheduledJobEndpoints(app) {
   // Update a scheduled job
   app.put(
     "/scheduled-jobs/:id",
-    [validatedRequest, isSingleUserMode],
+    [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (request, response) => {
       try {
-        const { name, prompt, tools, schedule, enabled } = reqBody(request);
+        const { name, prompt, tools, schedule, enabled, telegramRecipientIds } = reqBody(request);
         const updates = {};
 
         if (name !== undefined) updates.name = String(name).trim();
+        if (telegramRecipientIds !== undefined) {
+          const recipients = await validateTelegramRecipients(telegramRecipientIds);
+          if (recipients.error) return response.status(400).json({ job: null, error: recipients.error });
+          updates.telegramRecipientIds = recipients.ids;
+        }
         if (prompt !== undefined) updates.prompt = String(prompt).trim();
         if (tools !== undefined) updates.tools = tools;
         if (enabled !== undefined) updates.enabled = Boolean(enabled);
@@ -275,7 +284,7 @@ function scheduledJobEndpoints(app) {
   // Delete a scheduled job
   app.delete(
     "/scheduled-jobs/:id",
-    [validatedRequest, isSingleUserMode],
+    [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (request, response) => {
       try {
         backgroundService.removeScheduledJob(Number(request.params.id));
@@ -292,7 +301,7 @@ function scheduledJobEndpoints(app) {
   // Toggle enable/disable
   app.post(
     "/scheduled-jobs/:id/toggle",
-    [validatedRequest, isSingleUserMode],
+    [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (request, response) => {
       try {
         const job = await ScheduledJob.get({
@@ -333,7 +342,7 @@ function scheduledJobEndpoints(app) {
   // Manual trigger — runs the job immediately
   app.post(
     "/scheduled-jobs/:id/trigger",
-    [validatedRequest, isSingleUserMode],
+    [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (request, response) => {
       try {
         const job = await ScheduledJob.get({
@@ -357,7 +366,7 @@ function scheduledJobEndpoints(app) {
   // List runs for a job
   app.get(
     "/scheduled-jobs/:id/runs",
-    [validatedRequest, isSingleUserMode],
+    [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (request, response) => {
       try {
         const runs = await ScheduledJobRun.where(
@@ -372,6 +381,17 @@ function scheduledJobEndpoints(app) {
       }
     }
   );
+}
+
+async function validateTelegramRecipients(value) {
+  if (!Array.isArray(value)) return { ids: [], error: "Telegram recipients must be an array." };
+  const ids = [...new Set(value.map(Number).filter((id) => Number.isInteger(id) && id > 0))];
+  if (ids.length !== value.length) return { ids: [], error: "Invalid Telegram recipient." };
+  if (!ids.length) return { ids, error: null };
+  const users = await User.where({ id: { in: ids } });
+  if (users.length !== ids.length || users.some((user) => !user.telegramChatId))
+    return { ids: [], error: "Every selected recipient must have Telegram linked." };
+  return { ids, error: null };
 }
 
 module.exports = { scheduledJobEndpoints };

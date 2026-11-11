@@ -52,7 +52,7 @@ function workspaceEndpoints(app) {
 
   app.post(
     "/workspace/new",
-    [validatedRequest, flexUserRoleValid([ROLES.admin, ROLES.manager])],
+    [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (request, response) => {
       try {
         const user = await userFromSession(request, response);
@@ -88,7 +88,7 @@ function workspaceEndpoints(app) {
 
   app.post(
     "/workspace/:slug/update",
-    [validatedRequest, flexUserRoleValid([ROLES.admin, ROLES.manager])],
+    [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (request, response) => {
       try {
         const user = await userFromSession(request, response);
@@ -120,7 +120,7 @@ function workspaceEndpoints(app) {
     "/workspace/:slug/upload",
     [
       validatedRequest,
-      flexUserRoleValid([ROLES.admin, ROLES.manager]),
+      flexUserRoleValid([ROLES.admin]),
       handleFileUpload,
     ],
     async function (request, response) {
@@ -187,7 +187,7 @@ function workspaceEndpoints(app) {
 
   app.post(
     "/workspace/:slug/upload-link",
-    [validatedRequest, flexUserRoleValid([ROLES.admin, ROLES.manager])],
+    [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (request, response) => {
       try {
         const Collector = new CollectorApi();
@@ -230,7 +230,7 @@ function workspaceEndpoints(app) {
 
   app.post(
     "/workspace/:slug/update-embeddings",
-    [validatedRequest, flexUserRoleValid([ROLES.admin, ROLES.manager])],
+    [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (request, response) => {
       try {
         const user = await userFromSession(request, response);
@@ -298,7 +298,7 @@ function workspaceEndpoints(app) {
     "/workspace/:slug",
     [
       validatedRequest,
-      flexUserRoleValid([ROLES.admin, ROLES.manager]),
+      flexUserRoleValid([ROLES.admin]),
       workspaceDeletionProtection,
     ],
     async (request, response) => {
@@ -343,7 +343,7 @@ function workspaceEndpoints(app) {
 
   app.delete(
     "/workspace/:slug/reset-vector-db",
-    [validatedRequest, flexUserRoleValid([ROLES.admin, ROLES.manager])],
+    [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (request, response) => {
       try {
         const { slug = "" } = request.params;
@@ -585,6 +585,17 @@ function workspaceEndpoints(app) {
 
         if (!existingChat) return response.status(404).json({ success: false });
         await WorkspaceChats.updateFeedbackScore(chatId, feedback);
+        if (feedback !== null) {
+          await EventLogs.logEvent(
+            "agent_response_feedback",
+            {
+              chatId: Number(chatId),
+              feedback: Number(feedback) === 1,
+              workspaceId: response.locals.workspace.id,
+            },
+            user?.id
+          );
+        }
         return response.status(200).json({ success: true });
       } catch (error) {
         console.error("Error updating chat feedback:", error);
@@ -613,7 +624,7 @@ function workspaceEndpoints(app) {
 
   app.post(
     "/workspace/:slug/suggested-messages",
-    [validatedRequest, flexUserRoleValid([ROLES.admin, ROLES.manager])],
+    [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (request, response) => {
       try {
         const { messages = [] } = reqBody(request);
@@ -644,7 +655,7 @@ function workspaceEndpoints(app) {
     "/workspace/:slug/update-pin",
     [
       validatedRequest,
-      flexUserRoleValid([ROLES.admin, ROLES.manager]),
+      flexUserRoleValid([ROLES.admin]),
       validWorkspaceSlug,
     ],
     async (request, response) => {
@@ -821,7 +832,7 @@ function workspaceEndpoints(app) {
     "/workspace/:slug/upload-and-embed",
     [
       validatedRequest,
-      flexUserRoleValid([ROLES.admin, ROLES.manager]),
+      flexUserRoleValid([ROLES.admin]),
       handleFileUpload,
     ],
     async function (request, response) {
@@ -899,7 +910,7 @@ function workspaceEndpoints(app) {
     "/workspace/:slug/remove-and-unembed",
     [
       validatedRequest,
-      flexUserRoleValid([ROLES.admin, ROLES.manager]),
+      flexUserRoleValid([ROLES.admin]),
       handleFileUpload,
     ],
     async function (request, response) {
@@ -928,7 +939,7 @@ function workspaceEndpoints(app) {
     "/workspace/:slug/prompt-history",
     [
       validatedRequest,
-      flexUserRoleValid([ROLES.admin, ROLES.manager]),
+      flexUserRoleValid([ROLES.admin]),
       validWorkspaceSlug,
     ],
     async (_, response) => {
@@ -949,7 +960,7 @@ function workspaceEndpoints(app) {
     "/workspace/:slug/prompt-history",
     [
       validatedRequest,
-      flexUserRoleValid([ROLES.admin, ROLES.manager]),
+      flexUserRoleValid([ROLES.admin]),
       validWorkspaceSlug,
     ],
     async (_, response) => {
@@ -970,7 +981,7 @@ function workspaceEndpoints(app) {
     "/workspace/:slug/prompt-history/:id",
     [
       validatedRequest,
-      flexUserRoleValid([ROLES.admin, ROLES.manager]),
+      flexUserRoleValid([ROLES.admin]),
       validWorkspaceSlug,
     ],
     async (request, response) => {
@@ -1016,7 +1027,7 @@ function workspaceEndpoints(app) {
     "/workspace/:slug/embed-progress",
     [
       validatedRequest,
-      flexUserRoleValid([ROLES.admin, ROLES.manager]),
+      flexUserRoleValid([ROLES.admin]),
       validWorkspaceSlug,
     ],
     async (request, response) => {
@@ -1047,7 +1058,7 @@ function workspaceEndpoints(app) {
     "/workspace/:slug/embed-queue",
     [
       validatedRequest,
-      flexUserRoleValid([ROLES.admin, ROLES.manager]),
+      flexUserRoleValid([ROLES.admin]),
       validWorkspaceSlug,
     ],
     async (request, response) => {
@@ -1084,6 +1095,49 @@ function workspaceEndpoints(app) {
       } catch (error) {
         console.error("Error checking if agent command is available:", error);
         response.status(500).json({ showAgentCommand: true });
+      }
+    }
+  );
+
+  app.get(
+    "/workspace/:slug/sql-help",
+    [validatedRequest, flexUserRoleValid([ROLES.all]), validWorkspaceSlug],
+    async (request, response) => {
+      try {
+        const { listSQLConnections } = require("../utils/agents/aibitat/plugins/sql-agent/SQLConnectors");
+        const user = await userFromSession(request, response);
+        const connections = await listSQLConnections({
+          userId: user?.id,
+          workspaceId: response.locals.workspace.id,
+        });
+        const { listConnectedFolders } = require("../utils/chats/googleDriveContext");
+        const driveFolders = (await listConnectedFolders(user)).filter(
+          (folder) =>
+            folder.status === "approved" &&
+            folder.workspace?.id === response.locals.workspace.id
+        );
+        response.status(200).json({
+          driveFolders: driveFolders.map(({ id, name }) => ({ id, name })),
+          connections: connections.map(({ database_id, engine, description, queries = [] }) => ({
+            database_id,
+            engine,
+            description: description || "Descrição da origem ainda não cadastrada.",
+            queries: queries.map(({ id, title, description: queryDescription, examples = [], parameters = [] }) => ({
+              id,
+              title,
+              description: queryDescription,
+              examples: Array.isArray(examples) ? examples : [],
+              parameters: parameters.map(({ name, description: parameterDescription, required }) => ({
+                name,
+                description: parameterDescription,
+                required: required !== false,
+              })),
+            })),
+          })),
+        });
+      } catch (error) {
+        console.error("Could not load SQL chat help:", error.message);
+        response.status(500).json({ connections: [], error: "Could not load SQL help." });
       }
     }
   );

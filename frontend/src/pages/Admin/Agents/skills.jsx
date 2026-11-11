@@ -6,6 +6,7 @@ import FileSystemSkillPanel from "./FileSystemSkillPanel";
 import CreateFileSkillPanel from "./CreateFileSkillPanel";
 import GMailSkillPanel from "./GMailSkillPanel";
 import GoogleCalendarSkillPanel from "./GoogleCalendarSkillPanel";
+import GoogleDriveIntegrationPanel from "./GoogleDriveIntegrationPanel";
 import OutlookSkillPanel from "./OutlookSkillPanel";
 import {
   Brain,
@@ -137,6 +138,14 @@ export const getConfigurableSkills = (
 });
 
 export const getAppIntegrationSkills = (t) => ({
+  "google-drive-integration": {
+    title: "Google Drive",
+    description:
+      "Configure a conexão do Google Drive da empresa e gerencie as pastas indexadas.",
+    component: GoogleDriveIntegrationPanel,
+    Icon: ({ size }) => <FolderOpen size={size} />,
+    configurationOnly: true,
+  },
   "gmail-agent": {
     title: t("agent.skill.gmail.title"),
     description: t("agent.skill.gmail.description"),

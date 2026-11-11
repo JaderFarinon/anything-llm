@@ -1,0 +1,10 @@
+# Complementa a configuracao do repositorio para execucao local persistente.
+services:
+  anything-llm:
+    build:
+      network: host
+    restart: unless-stopped
+    # Windows reserves host port 3001 on some machines. Keep the container's
+    # internal SERVER_PORT at 3001 and publish it on an available host port.
+    ports: !override
+      - "3301:3001"

@@ -62,7 +62,11 @@ export default function SingleUserAuth() {
   useEffect(() => {
     const fetchCustomAppName = async () => {
       const { appName } = await System.fetchCustomAppName();
-      setCustomAppName(appName || "");
+      setCustomAppName(
+        typeof appName === "string" && /nexo|anything\s?llm/i.test(appName)
+          ? "AnyHealth"
+          : appName || ""
+      );
       setLoading(false);
     };
     fetchCustomAppName();
@@ -82,7 +86,7 @@ export default function SingleUserAuth() {
               </h3>
             </div>
             <p className="text-zinc-400 light:text-zinc-600 text-sm text-center">
-              {t("login.sign-in", { appName: customAppName || "AnythingLLM" })}
+              {t("login.sign-in", { appName: customAppName || "AnyHealth" })}
             </p>
           </div>
         </div>

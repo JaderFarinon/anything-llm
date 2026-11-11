@@ -7,7 +7,10 @@ import AddPresetModal from "./SlashPresets/AddPresetModal";
 import EditPresetModal from "./SlashPresets/EditPresetModal";
 import PublishEntityModal from "@/components/CommunityHub/PublishEntityModal";
 import showToast from "@/utils/toast";
-import { PROMPT_INPUT_EVENT } from "@/components/WorkspaceChat/ChatContainer/PromptInput";
+import {
+  OPEN_SQL_HELP_EVENT,
+  PROMPT_INPUT_EVENT,
+} from "@/components/WorkspaceChat/ChatContainer/PromptInput";
 import useToolsMenuItems from "../../useToolsMenuItems";
 import SlashCommandRow from "./SlashCommandRow";
 
@@ -60,6 +63,12 @@ export default function SlashCommandsTab({
         description: t("chat_window.preset_reset_description"),
         autoSubmit: true,
       },
+      {
+        command: "/ajuda",
+        description: "Lista as conexões e consultas disponíveis neste workspace",
+        autoSubmit: false,
+        openHelp: true,
+      },
       ...(imageGenEnabled
         ? [
             {
@@ -80,8 +89,13 @@ export default function SlashCommandsTab({
   );
 
   const handleUseCommand = useCallback(
-    (command, autoSubmit = false) => {
+    (command, autoSubmit = false, openHelp = false) => {
       setShowing(false);
+
+      if (openHelp) {
+        window.dispatchEvent(new CustomEvent(OPEN_SQL_HELP_EVENT));
+        return;
+      }
 
       // Auto-submit commands (/reset) fire immediately
       if (autoSubmit) {
@@ -117,7 +131,7 @@ export default function SlashCommandsTab({
     highlightedIndex,
     onSelect: (item) => {
       const text = item.autoSubmit ? item.command : `${item.command} `;
-      handleUseCommand(text, item.autoSubmit);
+      handleUseCommand(text, item.autoSubmit, item.openHelp);
     },
     registerItemCount,
   });
@@ -179,7 +193,8 @@ export default function SlashCommandsTab({
           onClick={() =>
             handleUseCommand(
               item.autoSubmit ? item.command : `${item.command} `,
-              item.autoSubmit
+              item.autoSubmit,
+              item.openHelp
             )
           }
           onEdit={item.preset ? () => handleEditPreset(item.preset) : undefined}

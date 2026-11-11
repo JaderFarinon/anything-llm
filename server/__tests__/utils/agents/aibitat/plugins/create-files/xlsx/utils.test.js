@@ -273,7 +273,7 @@ describe("applyBranding", () => {
     applyBranding(workbook);
 
     const cell = worksheet.getCell(4, 1);
-    expect(cell.value).toBe("Created with AnythingLLM");
+    expect(cell.value).toBe("Created with AnyHealth");
     expect(cell.font).toEqual({
       italic: true,
       size: 9,
@@ -290,7 +290,7 @@ describe("applyBranding", () => {
   test("does not merge when the sheet has one column", () => {
     const { workbook, worksheet } = sheetWith([["a"], ["b"]]);
     applyBranding(workbook);
-    expect(worksheet.getCell(4, 1).value).toBe("Created with AnythingLLM");
+    expect(worksheet.getCell(4, 1).value).toBe("Created with AnyHealth");
     expect(worksheet.getCell(4, 1).isMerged).toBe(false);
   });
 
@@ -300,7 +300,7 @@ describe("applyBranding", () => {
     workbook.addWorksheet("Two").addRow(["x"]);
     applyBranding(workbook);
     for (const worksheet of workbook.worksheets) {
-      expect(worksheet.getCell(3, 1).value).toBe("Created with AnythingLLM");
+      expect(worksheet.getCell(3, 1).value).toBe("Created with AnyHealth");
     }
   });
 
@@ -308,7 +308,7 @@ describe("applyBranding", () => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Empty");
     applyBranding(workbook);
-    expect(worksheet.getCell(3, 1).value).toBe("Created with AnythingLLM");
+    expect(worksheet.getCell(3, 1).value).toBe("Created with AnyHealth");
   });
 });
 

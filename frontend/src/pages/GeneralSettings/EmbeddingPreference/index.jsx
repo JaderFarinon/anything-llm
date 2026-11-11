@@ -3,7 +3,7 @@ import Sidebar from "@/components/SettingsSidebar";
 import { isMobile } from "react-device-detect";
 import System from "@/models/system";
 import showToast from "@/utils/toast";
-import AnythingLLMIcon from "@/media/logo/anything-llm-icon.png";
+import AnyHealthIcon from "@/media/logo/anyhealth-mark.svg";
 import OpenAiLogo from "@/media/llmprovider/openai.png";
 import AzureOpenAiLogo from "@/media/llmprovider/azure.png";
 import GeminiAiLogo from "@/media/llmprovider/gemini.png";
@@ -44,12 +44,12 @@ import ProviderSearchMenu from "@/components/lib/ProviderSearchMenu";
 
 const EMBEDDERS = [
   {
-    name: "AnythingLLM Embedder",
+    name: "Embutidor AnyHealth",
     value: "native",
-    logo: AnythingLLMIcon,
+    logo: AnyHealthIcon,
     options: (settings) => <NativeEmbeddingOptions settings={settings} />,
     description:
-      "Use the built-in embedding provider for AnythingLLM. Zero setup!",
+      "Use AnyHealth's built-in embedding provider. No setup required.",
   },
   {
     name: "OpenAI",

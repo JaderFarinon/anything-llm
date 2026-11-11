@@ -1,6 +1,7 @@
 const { v4: uuidv4 } = require("uuid");
 const { EphemeralAgentHandler } = require("../../agents/ephemeral");
 const { WorkspaceChats } = require("../../../models/workspaceChats");
+const { telegramSessionId } = require("../utils/access");
 const { safeJsonParse } = require("../../http");
 const {
   editMessage,
@@ -33,6 +34,7 @@ async function handleAgentResponse(
   chatId,
   workspace,
   thread,
+  user,
   message,
   voiceResponse = false,
   attachments = []
@@ -237,7 +239,8 @@ async function handleAgentResponse(
       uuid: uuidv4(),
       workspace,
       prompt: message,
-      userId: null,
+      userId: user?.id || null,
+      sessionId: telegramSessionId(user),
       threadId: thread?.id || null,
       attachments,
     }).init();
@@ -293,6 +296,8 @@ async function handleAgentResponse(
     if (responseText) {
       await WorkspaceChats.new({
         workspaceId: workspace.id,
+        user,
+        apiSessionId: telegramSessionId(user),
         prompt: message,
         response: {
           text: responseText,

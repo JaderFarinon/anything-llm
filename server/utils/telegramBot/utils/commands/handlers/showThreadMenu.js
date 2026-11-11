@@ -1,6 +1,7 @@
 const { Workspace } = require("../../../../../models/workspace");
 const { WorkspaceChats } = require("../../../../../models/workspaceChats");
 const { WorkspaceThread } = require("../../../../../models/workspaceThread");
+const { canAccessTelegramWorkspace, telegramSessionId } = require("../../access");
 const THREADS_PER_PAGE = 8;
 
 /**
@@ -20,10 +21,12 @@ async function showThreadMenu(
 ) {
   const pageNum = typeof page === "number" && !isNaN(page) ? page : 0;
   const workspace = await Workspace.get({ id: workspaceId });
-  if (!workspace) return;
+  if (!workspace || !(await canAccessTelegramWorkspace(ctx, chatId, workspace))) return;
 
+  const user = await ctx.getUser?.(chatId);
   const threads = await WorkspaceThread.where({
     workspace_id: workspace.id,
+    user_id: user?.id || null,
   });
 
   const state = ctx.getState(chatId);
@@ -32,6 +35,8 @@ async function showThreadMenu(
 
   const defaultThreadChatCount = await WorkspaceChats.count({
     workspaceId: workspace.id,
+    user_id: user?.id || null,
+    api_session_id: telegramSessionId(user),
     thread_id: null,
   });
   const isDefaultActive = !state.threadSlug;
@@ -48,6 +53,8 @@ async function showThreadMenu(
   for (const thread of threads) {
     const threadChatCount = await WorkspaceChats.count({
       workspaceId: workspace.id,
+      user_id: user?.id || null,
+      api_session_id: telegramSessionId(user),
       thread_id: thread.id,
     });
 

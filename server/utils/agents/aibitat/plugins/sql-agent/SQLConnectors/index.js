@@ -1,5 +1,6 @@
 const { SystemSettings } = require("../../../../../../models/systemSettings");
 const { safeJsonParse } = require("../../../../../http");
+const prisma = require("../../../../../../utils/prisma");
 
 /**
  * @typedef {('postgresql'|'mysql'|'sql-server')} SQLEngine
@@ -47,11 +48,57 @@ function getDBClient(identifier = "", connectionConfig = {}) {
  * Lists all of the known database connection that can be used by the agent.
  * @returns {Promise<[SQLConnection]>}
  */
-async function listSQLConnections() {
-  return safeJsonParse(
-    (await SystemSettings.get({ label: "agent_sql_connections" }))?.value,
-    []
-  );
+async function listSQLConnections(scopeContext = null) {
+  const connections = await SystemSettings.getSQLConnections();
+  if (scopeContext === null) return connections;
+
+  const { userId = null, workspaceId = null } = scopeContext || {};
+  const globalConnections = () =>
+    connections.filter((connection) => (connection.accessScope || "global") === "global");
+  if (!userId) return globalConnections();
+
+  const user = await prisma.users.findUnique({
+    where: { id: Number(userId) },
+    select: { id: true, role: true },
+  });
+  if (!user) return globalConnections();
+  if (user.role === "admin") return connections;
+
+  const [companyMemberships, workspace] = await Promise.all([
+    prisma.user_companies.findMany({
+      where: { userId: user.id },
+      select: { companyId: true },
+    }),
+    workspaceId
+      ? prisma.workspaces.findUnique({
+          where: { id: Number(workspaceId) },
+          select: { id: true, companyId: true },
+        })
+      : null,
+  ]);
+  const companyIds = new Set(companyMemberships.map(({ companyId }) => companyId));
+
+  return connections.filter((connection) => {
+    const scope = connection.accessScope || "global";
+    const scopeId = Number(connection.accessScopeId);
+    if (scope === "global") return true;
+    if (scope === "user") return scopeId === user.id;
+    if (scope === "workspace") return !!workspace && scopeId === workspace.id;
+    if (scope === "company")
+      return (
+        companyIds.has(scopeId) &&
+        (!workspace?.companyId || workspace.companyId === scopeId)
+      );
+    return false;
+  });
+}
+
+function sqlConnectionScopeContext(aibitat) {
+  const invocation = aibitat?.handlerProps?.invocation || {};
+  return {
+    userId: invocation.user_id ?? null,
+    workspaceId: invocation.workspace?.id ?? invocation.workspace_id ?? null,
+  };
 }
 
 /**
@@ -76,5 +123,6 @@ async function validateConnection(identifier = "", connectionConfig = {}) {
 module.exports = {
   getDBClient,
   listSQLConnections,
+  sqlConnectionScopeContext,
   validateConnection,
 };

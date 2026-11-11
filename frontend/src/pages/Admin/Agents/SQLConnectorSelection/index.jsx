@@ -7,6 +7,7 @@ import SQLAgentImage from "@/media/agents/sql-agent.png";
 import Admin from "@/models/admin";
 import Toggle from "@/components/lib/Toggle";
 import { Tooltip } from "react-tooltip";
+import SQLQueryModal from "./SQLQueryModal";
 
 export default function AgentSQLConnectorSelection({
   skill,
@@ -20,6 +21,7 @@ export default function AgentSQLConnectorSelection({
   const { isOpen, openModal, closeModal } = useModal();
   const [connections, setConnections] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [queryEditor, setQueryEditor] = useState(null);
   const prevHasChanges = useRef(hasChanges);
 
   // Load connections on mount
@@ -77,7 +79,7 @@ export default function AgentSQLConnectorSelection({
     setConnections((prev) =>
       prev.map((conn) =>
         conn.database_id === updatedConnection.originalDatabaseId
-          ? updatedConnection
+          ? { ...updatedConnection, queries: conn.queries || [] }
           : conn
       )
     );
@@ -89,7 +91,50 @@ export default function AgentSQLConnectorSelection({
    */
   function handleAddConnection(newConnection) {
     setHasChanges(true);
-    setConnections((prev) => [...prev, newConnection]);
+    setConnections((prev) => [...prev, { ...newConnection, queries: [] }]);
+  }
+
+  function saveQuery(query) {
+    const databaseId = queryEditor.connection.database_id;
+    setHasChanges(true);
+    setConnections((prev) =>
+      prev.map((connection) => {
+        if (connection.database_id !== databaseId) return connection;
+        const queries = connection.queries || [];
+        const exists = queries.some((item) => item.id === query.id);
+        return {
+          ...connection,
+          action:
+            connection.action === "add" || connection.action === "update"
+              ? connection.action
+              : "queries",
+          queries: exists
+            ? queries.map((item) => (item.id === query.id ? query : item))
+            : [...queries, query],
+        };
+      })
+    );
+  }
+
+  function removeQuery(connection, queryId) {
+    const query = (connection.queries || []).find((item) => item.id === queryId);
+    if (!window.confirm(`Remove the saved query "${query?.title || queryId}"?`))
+      return;
+    setHasChanges(true);
+    setConnections((prev) =>
+      prev.map((item) =>
+        item.database_id !== connection.database_id
+          ? item
+          : {
+              ...item,
+              action:
+                item.action === "add" || item.action === "update"
+                  ? item.action
+                  : "queries",
+              queries: (item.queries || []).filter((query) => query.id !== queryId),
+            }
+      )
+    );
   }
 
   return (
@@ -153,14 +198,44 @@ export default function AgentSQLConnectorSelection({
                     connections
                       .filter((connection) => connection.action !== "remove")
                       .map((connection) => (
-                        <DBConnection
-                          key={connection.database_id}
-                          connection={connection}
-                          onRemove={handleRemoveConnection}
-                          onUpdate={handleUpdateConnection}
-                          setHasChanges={setHasChanges}
-                          connections={connections}
-                        />
+                        <div key={connection.database_id} className="flex flex-col gap-y-2 rounded-lg border border-white/10 p-3 light:border-slate-200">
+                          <DBConnection
+                            connection={connection}
+                            onRemove={handleRemoveConnection}
+                            onUpdate={handleUpdateConnection}
+                            setHasChanges={setHasChanges}
+                            connections={connections}
+                          />
+                          <div className="ml-14 flex flex-col gap-y-2 border-t border-white/10 pt-2 light:border-slate-200">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-semibold text-theme-text-primary">
+                                Saved queries ({(connection.queries || []).length})
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => setQueryEditor({ connection, query: null })}
+                                className="text-xs text-sky-400 hover:text-sky-300"
+                              >
+                                + Add query
+                              </button>
+                            </div>
+                            {(connection.queries || []).map((query) => (
+                              <div key={query.id} className="flex items-center justify-between gap-2 rounded bg-theme-bg-secondary px-2 py-1.5">
+                                <div className="min-w-0">
+                                  <p className="truncate text-xs font-medium text-theme-text-primary">{query.title}</p>
+                                  <p className="truncate text-[10px] text-theme-text-secondary">{query.description}</p>
+                                </div>
+                                <div className="flex shrink-0 gap-2">
+                                  <button type="button" onClick={() => setQueryEditor({ connection, query })} className="text-xs text-sky-400">Edit</button>
+                                  <button type="button" onClick={() => removeQuery(connection, query.id)} className="text-xs text-red-400">Remove</button>
+                                </div>
+                              </div>
+                            ))}
+                            {!(connection.queries || []).length && (
+                              <p className="text-[11px] text-theme-text-secondary">Add approved queries so the agent can answer questions from this database.</p>
+                            )}
+                          </div>
+                        </div>
                       ))
                   )}
                   <button
@@ -193,6 +268,13 @@ export default function AgentSQLConnectorSelection({
         setHasChanges={setHasChanges}
         onSubmit={handleAddConnection}
         connections={connections}
+      />
+      <SQLQueryModal
+        isOpen={!!queryEditor}
+        onClose={() => setQueryEditor(null)}
+        connection={queryEditor?.connection}
+        existingQuery={queryEditor?.query}
+        onSubmit={saveQuery}
       />
       <Tooltip
         id="edit-sql-connection-tooltip"

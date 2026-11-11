@@ -38,7 +38,7 @@ class PPIOLLM {
       baseURL: this.basePath,
       apiKey: process.env.PPIO_API_KEY ?? null,
       defaultHeaders: {
-        "HTTP-Referer": "https://anythingllm.com",
+        "HTTP-Referer": "https://anyhealth.qyvia.com.br",
         "X-API-Source": "anythingllm",
       },
     });

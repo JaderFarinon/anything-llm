@@ -1,6 +1,7 @@
 const { Workspace } = require("../../../../../models/workspace");
 const { getCustomModels } = require("../../../../helpers/customModels");
 const { resolveWorkspaceProvider } = require("../../index");
+const { isTelegramAdmin } = require("../../access");
 
 /**
  * Handle model selection for a workspace.
@@ -12,6 +13,10 @@ const { resolveWorkspaceProvider } = require("../../index");
  * @param {string} params.data
  */
 async function handleModelSelect({ ctx, chatId, query, messageId, data } = {}) {
+  if (!(await isTelegramAdmin(ctx, chatId))) {
+    await ctx.bot.answerCallbackQuery(query.id, { text: "Somente administradores podem alterar o modelo." });
+    return;
+  }
   const parts = data.slice(4).split(":");
   const workspaceId = parseInt(parts[0], 10);
   const modelIdPrefix = parts.slice(1).join(":");

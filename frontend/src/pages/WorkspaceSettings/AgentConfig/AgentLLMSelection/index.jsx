@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import AnythingLLMIcon from "@/media/logo/anything-llm-icon.png";
+import AnyHealthIcon from "@/media/logo/anyhealth-mark.svg";
 import AgentLLMItem from "./AgentLLMItem";
 import { ALL_LLM_PROVIDERS } from "@/pages/GeneralSettings/LLMPreference";
 import { Gauge } from "@phosphor-icons/react";
@@ -61,7 +61,7 @@ const WARN_PERFORMANCE = [
 const LLM_DEFAULT = {
   name: "System Default",
   value: "none",
-  logo: AnythingLLMIcon,
+  logo: AnyHealthIcon,
   options: () => <React.Fragment />,
   description:
     "Agents will use the workspace or system LLM unless otherwise specified.",

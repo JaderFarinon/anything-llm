@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import debounce from "lodash.debounce";
 import { ArrowUp, At } from "@phosphor-icons/react";
 import StopGenerationButton from "./StopGenerationButton";
@@ -23,6 +23,7 @@ import { isMobile } from "react-device-detect";
 
 export const PROMPT_INPUT_ID = "primary-prompt-input";
 export const PROMPT_INPUT_EVENT = "set_prompt_input";
+export const OPEN_SQL_HELP_EVENT = "open_sql_help";
 const MAX_EDIT_STACK_SIZE = 100;
 
 /**
@@ -46,6 +47,10 @@ export default function PromptInput({
   workspaceSlug = null,
   threadSlug = null,
   reasoningSessionSlug = null,
+  sqlHelp = { connections: [] },
+  sqlHelpOpen = false,
+  onRetrySQLHelp = () => {},
+  onCloseSQLHelp = () => {},
 }) {
   const { t } = useTranslation();
   const { showAgentCommand = true } = workspace ?? {};
@@ -65,6 +70,45 @@ export default function PromptInput({
   const inputTextSizeClass =
     isMobile && textSize !== "large" ? "text-[16px]" : textSizeClass;
   const [searchParams] = useSearchParams();
+  const sqlHelpSuggestions = useMemo(() => {
+    const sqlSuggestions = (sqlHelp?.connections || []).flatMap((connection) =>
+      (connection.queries || []).flatMap((query) =>
+        (query.examples || []).map((example) => ({
+          connection: connection.database_id,
+          example,
+        }))
+      )
+    );
+    const driveSuggestions = (sqlHelp?.driveFolders || []).map((folder) => ({
+      connection: "Google Drive",
+      example: `Resuma os principais assuntos dos documentos conectados à pasta ${folder.name}.`,
+    }));
+    return [...sqlSuggestions, ...driveSuggestions];
+  }, [sqlHelp]);
+  const hasAvailableHelpSources =
+    (sqlHelp?.connections || []).length > 0 ||
+    (sqlHelp?.driveFolders || []).length > 0;
+  const [suggestionIndex, setSuggestionIndex] = useState(0);
+  const [suggestionVisible, setSuggestionVisible] = useState(true);
+  const suggestionFadeTimeout = useRef(null);
+  const currentSuggestion = sqlHelpSuggestions.length
+    ? sqlHelpSuggestions[suggestionIndex % sqlHelpSuggestions.length]
+    : null;
+
+  useEffect(() => {
+    if (sqlHelpSuggestions.length < 2) return;
+    const interval = window.setInterval(() => {
+      setSuggestionVisible(false);
+      suggestionFadeTimeout.current = window.setTimeout(() => {
+        setSuggestionIndex((current) => (current + 1) % sqlHelpSuggestions.length);
+        setSuggestionVisible(true);
+      }, 250);
+    }, 10000);
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(suggestionFadeTimeout.current);
+    };
+  }, [sqlHelpSuggestions]);
 
   // Synchronizes prompt input value with localStorage, scoped to the current thread.
   usePromptInputStorage({
@@ -340,6 +384,96 @@ export default function PromptInput({
             : "flex flex-col gap-y-1 rounded-t-lg md:w-full w-full mx-auto max-w-[750px] items-center"
         }
       >
+        {centered || sqlHelpOpen ? (
+          <div className="mb-2 w-[95vw] md:w-[750px]">
+            {centered && !sqlHelpOpen && sqlHelpSuggestions.length > 0 && (
+              <button
+                type="button"
+                onClick={() => sendCommand({ text: currentSuggestion?.example || "" })}
+                aria-live="polite"
+                className={`block w-full truncate text-center text-xs text-theme-home-text-secondary transition-opacity duration-300 hover:text-theme-text-primary ${suggestionVisible ? "opacity-100" : "opacity-0"}`}
+                title={currentSuggestion?.example}
+              >
+                Sugestão · {currentSuggestion?.connection}: {currentSuggestion?.example}
+              </button>
+            )}
+            {centered && !sqlHelpOpen && sqlHelpSuggestions.length === 0 && (
+              <p className="text-center text-xs text-theme-home-text-secondary">
+                {sqlHelp?.loadError
+                  ? "Não consegui carregar as dicas agora. Digite /ajuda para consultar as fontes disponíveis."
+                  : hasAvailableHelpSources
+                    ? "Digite /ajuda para ver as fontes disponíveis e exemplos de perguntas."
+                    : "Digite /ajuda para consultar as fontes disponíveis neste workspace."}
+              </p>
+            )}
+            {sqlHelpOpen && (
+              <div className="max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-zinc-900/95 p-3 text-left shadow-lg light:border-slate-200 light:bg-white">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-theme-text-primary">Ajuda: fontes disponíveis neste workspace</p>
+                  <button type="button" onClick={onCloseSQLHelp} className="text-xs text-sky-400 hover:text-sky-300">Fechar</button>
+                </div>
+                {sqlHelp?.loadError && (
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <p className="text-xs text-amber-300">Não foi possível carregar as fontes agora.</p>
+                    <button type="button" onClick={onRetrySQLHelp} className="text-xs text-sky-400 hover:underline">Tentar novamente</button>
+                  </div>
+                )}
+                {!hasAvailableHelpSources && !sqlHelp?.loadError && (
+                  <p className="text-xs text-theme-text-secondary">Nenhuma consulta SQL ou pasta aprovada do Google Drive está disponível neste workspace.</p>
+                )}
+                {(sqlHelp?.driveFolders || []).length > 0 && (
+                  <section className="mb-3 border-t border-white/10 pt-2 first:border-0 first:pt-0 light:border-slate-200">
+                    <p className="text-xs font-semibold text-theme-text-primary">Google Drive · documentos aprovados</p>
+                    <div className="mt-2 flex flex-col gap-1">
+                      {sqlHelp.driveFolders.map((folder) => {
+                        const example = `Resuma os principais assuntos dos documentos conectados à pasta ${folder.name}.`;
+                        return (
+                          <button key={folder.id} type="button" onClick={() => { sendCommand({ text: example }); onCloseSQLHelp(); }} className="text-left text-[11px] text-sky-400 hover:underline">
+                            {folder.name} · {example}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+                {(sqlHelp?.connections || []).length > 0 && (
+                  <div className="flex flex-col gap-3">
+                    {sqlHelp.connections.map((connection) => (
+                      <section key={connection.database_id} className="border-t border-white/10 pt-2 first:border-0 first:pt-0 light:border-slate-200">
+                        <p className="text-xs font-semibold text-theme-text-primary">{connection.database_id} · {connection.engine}</p>
+                        <p className="mt-1 text-xs text-theme-text-secondary">{connection.description}</p>
+                        <div className="mt-2 flex flex-col gap-2">
+                          {(connection.queries || []).map((query) => (
+                            <div key={query.id} className="rounded bg-black/20 p-2 light:bg-slate-50">
+                              <p className="text-xs font-medium text-theme-text-primary">{query.title}</p>
+                              <p className="mt-0.5 text-[11px] text-theme-text-secondary">{query.description}</p>
+                              {(query.parameters || []).filter((parameter) => parameter.required).length > 0 && (
+                                <p className="mt-1 text-[11px] text-theme-text-secondary">
+                                  Informe: {(query.parameters || []).filter((parameter) => parameter.required).map((parameter) => parameter.description || parameter.name).join("; ")}
+                                </p>
+                              )}
+                              {(query.examples || []).length > 0 ? (
+                                <div className="mt-1 flex flex-col gap-1">
+                                  {query.examples.map((example, index) => (
+                                    <button key={`${query.id}-${index}`} type="button" onClick={() => { sendCommand({ text: example }); onCloseSQLHelp(); }} className="text-left text-[11px] text-sky-400 hover:underline">
+                                      “{example}”
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="mt-1 text-[11px] text-amber-300">Sem exemplos validados cadastrados.</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : null}
         <div
           className={`flex items-center rounded-lg md:w-full ${centered ? "mb-0" : "mb-4"}`}
         >

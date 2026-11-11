@@ -21,8 +21,12 @@ export default function CustomAppName() {
       }
 
       const { appName } = await System.fetchCustomAppName();
-      setCustomAppName(appName || "");
-      setOriginalAppName(appName || "");
+      const normalizedName =
+        typeof appName === "string" && /nexo|anything\s?llm/i.test(appName)
+          ? "AnyHealth"
+          : appName || "";
+      setCustomAppName(normalizedName);
+      setOriginalAppName(normalizedName);
       setCanCustomize(true);
       setLoading(false);
     };
@@ -74,7 +78,7 @@ export default function CustomAppName() {
           name="customAppName"
           type="text"
           className="border-none bg-theme-settings-input-bg mt-2 text-white placeholder:text-theme-settings-input-placeholder text-sm rounded-lg focus:outline-primary-button active:outline-primary-button outline-none block w-fit py-2 px-4"
-          placeholder="AnythingLLM"
+          placeholder="AnyHealth"
           required={true}
           autoComplete="off"
           onChange={handleChange}

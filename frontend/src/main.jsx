@@ -41,7 +41,7 @@ const router = createBrowserRouter([
           const { default: WorkspaceSettings } = await import(
             "@/pages/WorkspaceSettings"
           );
-          return { element: <ManagerRoute Component={WorkspaceSettings} /> };
+          return { element: <AdminRoute Component={WorkspaceSettings} /> };
         },
       },
       {
@@ -182,6 +182,15 @@ const router = createBrowserRouter([
         },
       },
       {
+        path: "/settings/agent-review",
+        lazy: async () => {
+          const { default: AgentReview } = await import(
+            "@/pages/Admin/AgentReview"
+          );
+          return { element: <AdminRoute Component={AgentReview} /> };
+        },
+      },
+      {
         path: "/settings/embed-chat-widgets",
         lazy: async () => {
           const { default: ChatEmbedWidgets } = await import(
@@ -318,14 +327,32 @@ const router = createBrowserRouter([
           const { default: AdminInvites } = await import(
             "@/pages/Admin/Invitations"
           );
-          return { element: <ManagerRoute Component={AdminInvites} /> };
+          return { element: <AdminRoute Component={AdminInvites} /> };
         },
       },
       {
         path: "/settings/users",
         lazy: async () => {
           const { default: AdminUsers } = await import("@/pages/Admin/Users");
-          return { element: <ManagerRoute Component={AdminUsers} /> };
+          return { element: <AdminRoute Component={AdminUsers} /> };
+        },
+      },
+      {
+        path: "/settings/companies",
+        lazy: async () => {
+          const { default: AdminCompanies } = await import(
+            "@/pages/Admin/Companies"
+          );
+          return { element: <AdminRoute Component={AdminCompanies} /> };
+        },
+      },
+      {
+        path: "/settings/google-drive",
+        lazy: async () => {
+          const { default: GoogleDriveSettings } = await import(
+            "@/pages/GeneralSettings/GoogleDrive"
+          );
+          return { element: <PrivateRoute Component={GoogleDriveSettings} /> };
         },
       },
       {
@@ -334,7 +361,7 @@ const router = createBrowserRouter([
           const { default: AdminWorkspaces } = await import(
             "@/pages/Admin/Workspaces"
           );
-          return { element: <ManagerRoute Component={AdminWorkspaces} /> };
+          return { element: <AdminRoute Component={AdminWorkspaces} /> };
         },
       },
       // Onboarding Flow
@@ -413,7 +440,7 @@ const router = createBrowserRouter([
           const { default: ScheduledJobs } = await import(
             "@/pages/GeneralSettings/ScheduledJobs"
           );
-          return { element: <SingleUserRoute Component={ScheduledJobs} /> };
+          return { element: <AdminRoute Component={ScheduledJobs} /> };
         },
       },
       {
@@ -422,7 +449,7 @@ const router = createBrowserRouter([
           const { default: ScheduledJobRuns } = await import(
             "@/pages/GeneralSettings/ScheduledJobs/RunHistoryPage"
           );
-          return { element: <SingleUserRoute Component={ScheduledJobRuns} /> };
+          return { element: <AdminRoute Component={ScheduledJobRuns} /> };
         },
       },
       {
@@ -432,7 +459,7 @@ const router = createBrowserRouter([
             "@/pages/GeneralSettings/ScheduledJobs/RunDetailPage"
           );
           return {
-            element: <SingleUserRoute Component={ScheduledJobRunDetail} />,
+            element: <AdminRoute Component={ScheduledJobRunDetail} />,
           };
         },
       },

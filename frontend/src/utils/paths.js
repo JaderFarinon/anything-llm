@@ -35,9 +35,6 @@ export default {
     home: () => {
       return "/onboarding";
     },
-    survey: () => {
-      return "/onboarding/survey";
-    },
     llmPreference: () => {
       return "/onboarding/llm-preference";
     },
@@ -107,6 +104,12 @@ export default {
     users: () => {
       return `/settings/users`;
     },
+    companies: () => {
+      return `/settings/companies`;
+    },
+    googleDrive: () => {
+      return `/settings/google-drive`;
+    },
     invites: () => {
       return `/settings/invites`;
     },
@@ -168,6 +171,9 @@ export default {
     systemPromptVariables: () => "/settings/system-prompt-variables",
     logs: () => {
       return "/settings/event-logs";
+    },
+    agentReview: () => {
+      return "/settings/agent-review";
     },
     privacy: () => {
       return "/settings/privacy";

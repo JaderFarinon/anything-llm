@@ -4,6 +4,7 @@ module.exports.SqlAgentListTables = {
     const {
       listSQLConnections,
       getDBClient,
+      sqlConnectionScopeContext,
     } = require("./SQLConnectors/index.js");
 
     function formatQueryForDisplay(query, params = []) {
@@ -57,7 +58,9 @@ module.exports.SqlAgentListTables = {
           handler: async function ({ database_id = "" }) {
             try {
               this.super.handlerProps.log(`Using the sql-list-tables tool.`);
-              const databaseConfig = (await listSQLConnections()).find(
+              const databaseConfig = (await listSQLConnections(
+                sqlConnectionScopeContext(this.super)
+              )).find(
                 (db) => db.database_id === database_id
               );
               if (!databaseConfig) {

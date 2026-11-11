@@ -1,4 +1,5 @@
 const { Workspace } = require("../../../../../models/workspace");
+const { SystemSettings } = require("../../../../../models/systemSettings");
 
 /**
  * Handle the creation of a new workspace.
@@ -8,6 +9,11 @@ const { Workspace } = require("../../../../../models/workspace");
  * @param {{id: string}} params.query - Telegram callback query object
  */
 async function handleWorkspaceCreate({ ctx, chatId, query } = {}) {
+  const user = await ctx.getUser?.(chatId);
+  if ((await SystemSettings.isMultiUserMode()) && user?.role !== "admin") {
+    await ctx.bot.answerCallbackQuery(query.id, { text: "Somente administradores podem criar workspaces." });
+    return;
+  }
   const botName = ctx.config.bot_username || "Bot";
   const wsName = `${botName} Workspace`;
   const { workspace, message: error } = await Workspace.new(wsName, null, {
