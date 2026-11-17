@@ -390,6 +390,7 @@ export default function GoogleDriveSettings() {
               <ConnectionCard
                 connection={personalConnection}
                 onChooseFolder={openFolderPicker}
+                onReconnect={() => connect("personal")}
               />
             )}
           </section>
@@ -418,12 +419,21 @@ export default function GoogleDriveSettings() {
                           )}
                         </div>
                         {connection ? (
-                          <button
-                            onClick={() => openFolderPicker(connection)}
-                            className="text-xs text-sky-400 hover:text-sky-300"
-                          >
-                            Gerenciar pastas
-                          </button>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <button
+                              onClick={() => openFolderPicker(connection)}
+                              className="text-xs text-sky-400 hover:text-sky-300"
+                            >
+                              Gerenciar pastas
+                            </button>
+                            <button
+                              onClick={() => connect("company", company.id)}
+                              className="text-xs text-amber-400 hover:text-amber-300"
+                              title="Renova a autorização Google e preserva as pastas selecionadas."
+                            >
+                              Reconectar Google Drive
+                            </button>
+                          </div>
                         ) : (
                           <CTAButton onClick={() => connect("company", company.id)}>
                             Conectar Drive da empresa
@@ -540,7 +550,7 @@ export default function GoogleDriveSettings() {
   );
 }
 
-function ConnectionCard({ connection, onChooseFolder }) {
+function ConnectionCard({ connection, onChooseFolder, onReconnect }) {
   const activeFolders = (connection.folders || []).filter(({ status }) => ["pending", "approved"].includes(status));
   return (
     <div className="mt-4 border-t border-white/10 pt-4">
@@ -549,7 +559,16 @@ function ConnectionCard({ connection, onChooseFolder }) {
           <p className="text-sm text-theme-text-primary">Conectado: {connection.googleEmail}</p>
           <p className="mt-1 text-xs text-theme-text-secondary">{activeFolders.length} {activeFolders.length === 1 ? "pasta principal selecionada" : "pastas principais selecionadas"} · subpastas incluídas</p>
         </div>
-        <button onClick={() => onChooseFolder(connection)} className="text-xs text-sky-400">Gerenciar pastas</button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button onClick={() => onChooseFolder(connection)} className="text-xs text-sky-400">Gerenciar pastas</button>
+          <button
+            onClick={onReconnect}
+            className="text-xs text-amber-400 hover:text-amber-300"
+            title="Renova a autorização Google e preserva as pastas selecionadas."
+          >
+            Reconectar Google Drive
+          </button>
+        </div>
       </div>
       {connection.lastError && <p className="mt-2 text-xs text-red-400">{connection.lastError}</p>}
       {!activeFolders.length && <p className="mt-2 text-xs text-theme-text-secondary">Nenhuma pasta selecionada.</p>}

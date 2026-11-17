@@ -416,6 +416,12 @@ const SidebarOptions = ({ user = null, t }) => (
               roles: ["admin"],
             },
             {
+              btnText: t("settings.agent-quality"),
+              href: paths.settings.agentQuality(),
+              flex: true,
+              roles: ["admin"],
+            },
+            {
               btnText: t("settings.scheduled-jobs"),
               href: paths.settings.scheduledJobs(),
               flex: true,

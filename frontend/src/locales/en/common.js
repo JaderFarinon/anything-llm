@@ -98,6 +98,7 @@ const TRANSLATIONS = {
     security: "Security",
     "event-logs": "Event Logs",
     "agent-review": "Agent Review",
+    "agent-quality": "Answer Quality",
     "scheduled-jobs": "Scheduled Jobs",
     privacy: "Privacy & Data",
     "ai-providers": "AI Providers",

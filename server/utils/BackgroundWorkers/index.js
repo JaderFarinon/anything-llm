@@ -33,6 +33,11 @@ class BackgroundService {
       interval: "1m",
     },
     {
+      name: "agent-daily-quality-report",
+      timeout: "5m",
+      interval: "1hr",
+    },
+    {
       name: "cleanup-orphan-documents",
       timeout: "1m",
       interval: "12hr",

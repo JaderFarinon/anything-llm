@@ -83,6 +83,7 @@ async function streamChatWithWorkspace(
   sessionReasoningEffort = null
 ) {
   const uuid = uuidv4();
+  const requestStartedAt = Date.now();
   // Routed workspaces show no reasoning controls, so a stored effort is
   // never applied to whichever model the router picks.
   if (usesModelRouter(workspace)) sessionReasoningEffort = null;
@@ -464,6 +465,10 @@ async function streamChatWithWorkspace(
       connector: LLMConnector,
     });
   }
+  // Provider duration measures only generation. This elapsed value includes
+  // retrieval, context assembly, and generation, which helps distinguish slow
+  // model calls from the rest of the chat pipeline.
+  metrics.requestDurationMs = Date.now() - requestStartedAt;
 
   if (completeText?.length > 0) {
     const { chat } = await WorkspaceChats.new({

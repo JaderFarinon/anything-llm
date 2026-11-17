@@ -191,6 +191,15 @@ const router = createBrowserRouter([
         },
       },
       {
+        path: "/settings/agent-quality",
+        lazy: async () => {
+          const { default: AgentQuality } = await import(
+            "@/pages/Admin/AgentQuality"
+          );
+          return { element: <AdminRoute Component={AgentQuality} /> };
+        },
+      },
+      {
         path: "/settings/embed-chat-widgets",
         lazy: async () => {
           const { default: ChatEmbedWidgets } = await import(

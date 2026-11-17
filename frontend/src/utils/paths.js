@@ -175,6 +175,9 @@ export default {
     agentReview: () => {
       return "/settings/agent-review";
     },
+    agentQuality: () => {
+      return "/settings/agent-quality";
+    },
     privacy: () => {
       return "/settings/privacy";
     },

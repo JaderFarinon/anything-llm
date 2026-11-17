@@ -82,6 +82,12 @@ const { isReservedCommand } = require("../utils/chats");
 const { AgentSkillWhitelist } = require("../models/agentSkillWhitelist");
 const { Memory } = require("../models/memory");
 const { dummyHashCompare } = require("../utils/helpers/dummyHashCompare");
+const prisma = require("../utils/prisma");
+const {
+  REPORT_EVENT: AGENT_QUALITY_REPORT_EVENT,
+  utcDayRange,
+  buildDailyQualityReport,
+} = require("../utils/agentQuality");
 
 function systemEndpoints(app) {
   if (!app) return;
@@ -1517,6 +1523,111 @@ function systemEndpoints(app) {
       } catch (error) {
         console.error("Could not apply agent suggestion:", error);
         response.status(500).json({ success: false, error: "Could not save the review decision." });
+      }
+    }
+  );
+
+  app.get(
+    "/system/agent-quality/interactions",
+    [chatHistoryViewable, validatedRequest, flexUserRoleValid([ROLES.admin])],
+    async (request, response) => {
+      try {
+        const { start, end, date } = utcDayRange(request.query.date);
+        const offset = Math.max(0, Number(request.query.offset) || 0);
+        const limit = Math.min(50, Math.max(1, Number(request.query.limit) || 25));
+        const where = {
+          include: true,
+          createdAt: { gte: start, lt: end },
+        };
+        const [chats, total] = await Promise.all([
+          prisma.workspace_chats.findMany({
+            where,
+            orderBy: { createdAt: "desc" },
+            skip: offset * limit,
+            take: limit,
+          }),
+          prisma.workspace_chats.count({ where }),
+        ]);
+        const workspaceIds = [...new Set(chats.map((chat) => chat.workspaceId))];
+        const userIds = [...new Set(chats.map((chat) => chat.user_id).filter(Boolean))];
+        const [workspaces, users] = await Promise.all([
+          workspaceIds.length
+            ? prisma.workspaces.findMany({ where: { id: { in: workspaceIds } }, select: { id: true, name: true } })
+            : [],
+          userIds.length
+            ? prisma.users.findMany({ where: { id: { in: userIds } }, select: { id: true, username: true } })
+            : [],
+        ]);
+        const workspaceNames = new Map(workspaces.map((item) => [item.id, item.name]));
+        const usernames = new Map(users.map((item) => [item.id, item.username]));
+        response.json({
+          date,
+          total,
+          offset,
+          limit,
+          interactions: chats.map((chat) => {
+            const data = safeJsonParse(chat.response, {});
+            return {
+              id: chat.id,
+              prompt: chat.prompt,
+              response: data?.text || "",
+              sources: Array.isArray(data?.sources)
+                ? data.sources.map((source) => ({
+                    title: source?.title || source?.name || source?.source || "Fonte",
+                    type: source?.sourceType || source?.type || source?.provider || "",
+                  }))
+                : [],
+              duration: Number.isFinite(Number(data?.metrics?.duration))
+                ? Number(data.metrics.duration)
+                : null,
+              requestDuration: Number.isFinite(Number(data?.metrics?.requestDurationMs))
+                ? Number(data.metrics.requestDurationMs) / 1000
+                : null,
+              feedbackScore: chat.feedbackScore,
+              createdAt: chat.createdAt,
+              workspace: workspaceNames.get(chat.workspaceId) || "Workspace removido",
+              username: usernames.get(chat.user_id) || (chat.api_session_id ? "API" : "Usuário desconhecido"),
+            };
+          }),
+        });
+      } catch (error) {
+        console.error("Could not load agent quality interactions:", error);
+        response.status(400).json({ success: false, error: error.message });
+      }
+    }
+  );
+
+  app.get(
+    "/system/agent-quality/reports",
+    [chatHistoryViewable, validatedRequest, flexUserRoleValid([ROLES.admin])],
+    async (_request, response) => {
+      try {
+        const events = await EventLogs.where(
+          { event: AGENT_QUALITY_REPORT_EVENT },
+          90,
+          { occurredAt: "desc" }
+        );
+        response.json({
+          reports: events.map((event) => safeJsonParse(event.metadata, {})),
+        });
+      } catch (error) {
+        console.error("Could not load agent quality reports:", error);
+        response.sendStatus(500);
+      }
+    }
+  );
+
+  app.post(
+    "/system/agent-quality/reports",
+    [chatHistoryViewable, validatedRequest, flexUserRoleValid([ROLES.admin])],
+    async (request, response) => {
+      try {
+        const { date } = reqBody(request);
+        const report = await buildDailyQualityReport(date);
+        response.json({ success: true, report });
+      } catch (error) {
+        console.error("Could not generate agent quality report:", error);
+        response.status(400).json({ success: false, error: error.message });
       }
     }
   );

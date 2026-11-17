@@ -1,6 +1,13 @@
 const { WorkspaceChats } = require("../../../../models/workspaceChats");
 const { WorkspaceThread } = require("../../../../models/workspaceThread");
 
+function getInvocationDurationMetric(invocation) {
+  const startedAt = new Date(invocation?.createdAt).getTime();
+  return Number.isFinite(startedAt) && startedAt > 0
+    ? { requestDurationMs: Math.max(0, Date.now() - startedAt) }
+    : {};
+}
+
 /**
  * Plugin to save chat history to AnythingLLM DB.
  */
@@ -99,7 +106,10 @@ const chatHistory = {
         { prompt, response, attachments = [] } = {}
       ) {
         const invocation = aibitat.handlerProps.invocation;
-        const metrics = aibitat.providerInstance?.getCumulativeUsage?.() ?? {};
+        const metrics = {
+          ...(aibitat.providerInstance?.getCumulativeUsage?.() ?? {}),
+          ...getInvocationDurationMetric(invocation),
+        };
         const citations = aibitat._pendingCitations ?? [];
         const outputs = aibitat._pendingOutputs ?? [];
         const clarifyingQuestions =
@@ -134,7 +144,10 @@ const chatHistory = {
         { prompt, response, attachments = [], options = {} } = {}
       ) {
         const invocation = aibitat.handlerProps.invocation;
-        const metrics = aibitat.providerInstance?.getCumulativeUsage?.() ?? {};
+        const metrics = {
+          ...(aibitat.providerInstance?.getCumulativeUsage?.() ?? {}),
+          ...getInvocationDurationMetric(invocation),
+        };
         const citations = aibitat._pendingCitations ?? [];
         const outputs = aibitat._pendingOutputs ?? [];
         const clarifyingQuestions =

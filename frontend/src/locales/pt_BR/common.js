@@ -91,6 +91,7 @@ const TRANSLATIONS = {
     security: "Segurança",
     "event-logs": "Logs de Eventos",
     "agent-review": "Revisão do agente",
+    "agent-quality": "Qualidade das respostas",
     privacy: "Privacidade e Dados",
     "ai-providers": "Provedores de IA",
     "agent-skills": "Habilidades de Agente",

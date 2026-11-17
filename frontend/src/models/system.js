@@ -705,6 +705,32 @@ const System = {
       .then((res) => res.json())
       .catch((e) => ({ success: false, error: e.message }));
   },
+  agentQualityInteractions: async (date, offset = 0, limit = 25) => {
+    const params = new URLSearchParams({ date, offset: String(offset), limit: String(limit) });
+    return await fetch(`${API_BASE}/system/agent-quality/interactions?${params}`, {
+      method: "GET",
+      headers: baseHeaders(),
+    })
+      .then((res) => res.json())
+      .catch((e) => ({ interactions: [], total: 0, error: e.message }));
+  },
+  agentQualityReports: async () => {
+    return await fetch(`${API_BASE}/system/agent-quality/reports`, {
+      method: "GET",
+      headers: baseHeaders(),
+    })
+      .then((res) => res.json())
+      .catch((e) => ({ reports: [], error: e.message }));
+  },
+  generateAgentQualityReport: async (date) => {
+    return await fetch(`${API_BASE}/system/agent-quality/reports`, {
+      method: "POST",
+      headers: baseHeaders(),
+      body: JSON.stringify({ date }),
+    })
+      .then((res) => res.json())
+      .catch((e) => ({ success: false, error: e.message }));
+  },
   clearEventLogs: async () => {
     return await fetch(`${API_BASE}/system/event-logs`, {
       method: "DELETE",
