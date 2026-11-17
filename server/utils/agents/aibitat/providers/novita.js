@@ -26,7 +26,7 @@ class NovitaProvider extends InheritMultiple([Provider, UnTooled]) {
       baseURL: "https://api.novita.ai/v3/openai",
       apiKey: process.env.NOVITA_LLM_API_KEY,
       defaultHeaders: {
-        "HTTP-Referer": "https://anythingllm.com",
+        "HTTP-Referer": "https://anyhealth.qyvia.com.br",
         "X-Novita-Source": "anythingllm",
       },
     });

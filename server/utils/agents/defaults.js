@@ -85,6 +85,9 @@ const WORKSPACE_AGENT = {
     ]);
 
     // If clarifying questions tools are enabled, add a note to the role that the user must use the request-user-input tool to ask questions.
+    role +=
+      "\n\nFor questions about company information, choose connected sources automatically: search document/Drive sources for contracts and files, and use the approved SQL catalog for structured records such as doctors, schedules, exams, payers, and billing. When a question needs both documents and database records, search both and reconcile only facts supported by the returned evidence. Do not ask the user to identify a connected source or workspace. If the available queries do not return the requested field, explain that limitation instead of substituting a different identifier or value.";
+
     if (!!clarifyingQuestionsSkills?.length)
       role +=
         "\n\nWhen you need information from the user (URLs, file paths, preferences, choices, etc.), you MUST use the request-user-input tool. Do not ask questions in your text response - the user cannot reply to text. Only the tool can collect user input.";

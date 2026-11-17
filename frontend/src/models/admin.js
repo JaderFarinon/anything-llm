@@ -2,6 +2,57 @@ import { API_BASE } from "@/utils/constants";
 import { baseHeaders } from "@/utils/request";
 
 const Admin = {
+  // Company and tenant management
+  companies: async () => {
+    return await fetch(`${API_BASE}/admin/companies`, {
+      method: "GET",
+      headers: baseHeaders(),
+    })
+      .then((res) => res.json())
+      .then((res) => res?.companies || [])
+      .catch((e) => {
+        console.error(e);
+        return [];
+      });
+  },
+  companyOptions: async () => {
+    return await fetch(`${API_BASE}/admin/companies/options`, {
+      method: "GET",
+      headers: baseHeaders(),
+    })
+      .then((res) => res.json())
+      .catch((e) => {
+        console.error(e);
+        return { users: [], workspaces: [] };
+      });
+  },
+  createCompany: async (name) => {
+    return await fetch(`${API_BASE}/admin/companies`, {
+      method: "POST",
+      headers: baseHeaders(),
+      body: JSON.stringify({ name }),
+    }).then((res) => res.json());
+  },
+  updateCompanyMembers: async (companyId, userIds) => {
+    return await fetch(`${API_BASE}/admin/companies/${companyId}/members`, {
+      method: "PUT",
+      headers: baseHeaders(),
+      body: JSON.stringify({ userIds }),
+    }).then((res) => res.json());
+  },
+  setCompanyWorkspace: async (companyId, workspaceId) => {
+    return await fetch(
+      `${API_BASE}/admin/companies/${companyId}/workspaces/${workspaceId}`,
+      { method: "PUT", headers: baseHeaders() }
+    ).then((res) => res.json());
+  },
+  clearCompanyWorkspace: async (workspaceId) => {
+    return await fetch(`${API_BASE}/admin/companies/workspaces/${workspaceId}`, {
+      method: "DELETE",
+      headers: baseHeaders(),
+    }).then((res) => res.json());
+  },
+
   // User Management
   users: async () => {
     return await fetch(`${API_BASE}/admin/users`, {

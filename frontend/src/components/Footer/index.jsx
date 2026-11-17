@@ -1,5 +1,4 @@
 import System from "@/models/system";
-import paths from "@/utils/paths";
 import {
   BookOpen,
   DiscordLogo,
@@ -14,8 +13,6 @@ import {
 import React, { useEffect, useState } from "react";
 import SettingsButton from "../SettingsButton";
 import { isMobile } from "react-device-detect";
-import { Tooltip } from "react-tooltip";
-import { Link } from "react-router-dom";
 
 export const MAX_ICONS = 3;
 export const ICON_COMPONENTS = {
@@ -47,70 +44,18 @@ export default function Footer() {
 
   if (!Array.isArray(footerData) || footerData.length === 0) {
     return (
-      <div className="flex justify-center mb-2">
+      <div className="flex flex-col items-center mb-2">
+        <span className="text-[10px] text-slate-400 mb-1">AnythingLLM Based</span>
         <div className="flex space-x-4">
-          <div className="flex w-fit">
-            <Link
-              to={paths.github()}
-              target="_blank"
-              rel="noreferrer"
-              className="transition-all duration-300 p-2 rounded-full bg-theme-sidebar-footer-icon hover:bg-theme-sidebar-footer-icon-hover"
-              aria-label="Find us on GitHub"
-              data-tooltip-id="footer-item"
-              data-tooltip-content="View Source Code"
-            >
-              <GithubLogo
-                weight="fill"
-                className="h-5 w-5 text-white light:text-slate-800"
-              />
-            </Link>
-          </div>
-          <div className="flex w-fit">
-            <Link
-              to={paths.docs()}
-              target="_blank"
-              rel="noreferrer"
-              className="transition-all duration-300 p-2 rounded-full bg-theme-sidebar-footer-icon hover:bg-theme-sidebar-footer-icon-hover"
-              aria-label="Docs"
-              data-tooltip-id="footer-item"
-              data-tooltip-content="Open AnythingLLM help docs"
-            >
-              <BookOpen
-                weight="fill"
-                className="h-5 w-5 text-white light:text-slate-800"
-              />
-            </Link>
-          </div>
-          <div className="flex w-fit">
-            <Link
-              to={paths.discord()}
-              target="_blank"
-              rel="noreferrer"
-              className="transition-all duration-300 p-2 rounded-full bg-theme-sidebar-footer-icon hover:bg-theme-sidebar-footer-icon-hover"
-              aria-label="Join our Discord server"
-              data-tooltip-id="footer-item"
-              data-tooltip-content="Join the AnythingLLM Discord"
-            >
-              <DiscordLogo
-                weight="fill"
-                className="h-5 w-5 text-white light:text-slate-800"
-              />
-            </Link>
-          </div>
           {!isMobile && <SettingsButton />}
         </div>
-        <Tooltip
-          id="footer-item"
-          place="top"
-          delayShow={300}
-          className="tooltip !text-xs z-99"
-        />
       </div>
     );
   }
 
   return (
-    <div className="flex justify-center mb-2">
+    <div className="flex flex-col items-center mb-2">
+      <span className="text-[10px] text-slate-400 mb-1">AnythingLLM Based</span>
       <div className="flex space-x-4">
         {footerData.map((item, index) => (
           <a
@@ -132,12 +77,6 @@ export default function Footer() {
         ))}
         {!isMobile && <SettingsButton />}
       </div>
-      <Tooltip
-        id="footer-item"
-        place="top"
-        delayShow={300}
-        className="tooltip !text-xs z-99"
-      />
     </div>
   );
 }

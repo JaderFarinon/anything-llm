@@ -1,4 +1,6 @@
 const { Workspace } = require("../../../../../models/workspace");
+const { WorkspaceUser } = require("../../../../../models/workspaceUsers");
+const { SystemSettings } = require("../../../../../models/systemSettings");
 const WORKSPACES_PER_PAGE = 8;
 
 /**
@@ -10,19 +12,15 @@ const WORKSPACES_PER_PAGE = 8;
  */
 async function showWorkspaceMenu(ctx, chatId, page = 0, messageId = null) {
   const pageNum = typeof page === "number" && !isNaN(page) ? page : 0;
-  const workspaces = await Workspace.where({});
+  let workspaces = await Workspace.where({});
+  const user = await ctx.getUser?.(chatId);
+  if ((await SystemSettings.isMultiUserMode()) && user?.role !== "admin") {
+    const memberships = await WorkspaceUser.where({ user_id: user?.id || -1 });
+    const allowedIds = new Set(memberships.map((membership) => membership.workspace_id));
+    workspaces = workspaces.filter((workspace) => allowedIds.has(workspace.id));
+  }
   if (!workspaces.length) {
-    await ctx.bot.sendMessage(
-      chatId,
-      "No workspaces found. Create one to get started!",
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "➕ Create Workspace", callback_data: "ws-create" }],
-          ],
-        },
-      }
-    );
+    await ctx.bot.sendMessage(chatId, "No workspaces are assigned to your account. Contact an administrator.");
     return;
   }
 

@@ -1,7 +1,10 @@
 module.exports.SqlAgentListDatabase = {
   name: "sql-list-databases",
   plugin: function () {
-    const { listSQLConnections } = require("./SQLConnectors");
+    const {
+      listSQLConnections,
+      sqlConnectionScopeContext,
+    } = require("./SQLConnectors");
     return {
       name: "sql-list-databases",
       setup(aibitat) {
@@ -36,7 +39,9 @@ module.exports.SqlAgentListDatabase = {
               `${this.caller}: Checking what are the available databases.`
             );
 
-            const connections = (await listSQLConnections()).map((conn) => {
+            const connections = (await listSQLConnections(
+              sqlConnectionScopeContext(this.super)
+            )).map((conn) => {
               const { connectionString: _connectionString, ...rest } = conn;
               return rest;
             });

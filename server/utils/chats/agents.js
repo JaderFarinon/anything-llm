@@ -62,6 +62,7 @@ async function grepAgents({
   thread = null,
   attachments = [],
   reasoningEffort = null,
+  forceAgent = false,
 }) {
   let nativeToolingEnabled = false;
 
@@ -71,7 +72,7 @@ async function grepAgents({
     nativeToolingEnabled = await Workspace.supportsNativeToolCalling(workspace);
 
   const agentHandles = WorkspaceAgentInvocation.parseAgents(message);
-  if (agentHandles.length > 0 || nativeToolingEnabled) {
+  if (agentHandles.length > 0 || nativeToolingEnabled || forceAgent) {
     const { invocation: newInvocation } = await WorkspaceAgentInvocation.new({
       prompt: message,
       workspace: workspace,

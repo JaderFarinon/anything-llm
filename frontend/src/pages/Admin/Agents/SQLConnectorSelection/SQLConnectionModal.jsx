@@ -10,6 +10,7 @@ import Modal, {
 import { WarningOctagon } from "@phosphor-icons/react";
 import { DB_LOGOS } from "./DBConnection";
 import System from "@/models/system";
+import Admin from "@/models/admin";
 import showToast from "@/utils/toast";
 import Toggle from "@/components/lib/Toggle";
 
@@ -73,6 +74,9 @@ function assembleConnectionString({
 const DEFAULT_ENGINE = "postgresql";
 const DEFAULT_CONFIG = {
   name: "",
+  description: "",
+  accessScope: "global",
+  accessScopeId: null,
   username: null,
   password: null,
   host: null,
@@ -108,6 +112,11 @@ export default function SQLConnectionModal({
   const isEditMode = !!existingConnection;
   const [engine, setEngine] = useState(DEFAULT_ENGINE);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
+  const [scopeTargets, setScopeTargets] = useState({
+    companies: [],
+    users: [],
+    workspaces: [],
+  });
   const [isValidating, setIsValidating] = useState(false);
 
   // Sync state when modal opens - useState initial values only run once on mount,
@@ -119,6 +128,9 @@ export default function SQLConnectionModal({
       setEngine(existingConnection.engine);
       setConfig({
         name: existingConnection.database_id,
+        description: existingConnection.description || "",
+        accessScope: existingConnection.accessScope || "global",
+        accessScopeId: existingConnection.accessScopeId || null,
         username: existingConnection.username,
         password: existingConnection.password,
         host: existingConnection.host,
@@ -132,10 +144,40 @@ export default function SQLConnectionModal({
       setEngine(DEFAULT_ENGINE);
       setConfig(DEFAULT_CONFIG);
     }
+
+    Promise.all([Admin.companyOptions(), Admin.companies()]).then(
+      ([options, companies]) =>
+        setScopeTargets({
+          companies,
+          users: options.users || [],
+          workspaces: options.workspaces || [],
+        })
+    );
   }, [isOpen, existingConnection]);
 
   // Track original database ID to send to server for updating if in edit mode
   const originalDatabaseId = isEditMode ? existingConnection.database_id : null;
+  const targetLabelForScope =
+    config.accessScope === "user"
+      ? "Usuário"
+      : config.accessScope === "workspace"
+        ? "Workspace"
+        : "Empresa";
+  const availableScopeTargets =
+    config.accessScope === "user"
+      ? scopeTargets.users.map((target) => ({
+          id: target.id,
+          label: target.username || `Usuário ${target.id}`,
+        }))
+      : config.accessScope === "workspace"
+        ? scopeTargets.workspaces.map((target) => ({
+            id: target.id,
+            label: target.name,
+          }))
+        : scopeTargets.companies.map((target) => ({
+            id: target.id,
+            label: target.name,
+          }));
 
   if (!isOpen) return null;
 
@@ -146,9 +188,13 @@ export default function SQLConnectionModal({
   }
 
   function onFormChange(e) {
+    if (["accessRestricted", "accessScope", "accessScopeId"].includes(e.target.name))
+      return;
     const form = new FormData(e.target.form);
-    setConfig({
+    setConfig((current) => ({
+      ...current,
       name: form.get("name").trim(),
+      description: form.get("description").trim(),
       username: form.get("username").trim(),
       password: form.get("password"),
       host: form.get("host").trim(),
@@ -157,6 +203,25 @@ export default function SQLConnectionModal({
       schema: form.get("schema")?.trim() || null,
       encrypt: form.get("encrypt") === "true",
       ssl: form.get("ssl") === "true",
+    }));
+  }
+
+  function updateAccessScope(e) {
+    const { name, value, checked } = e.target;
+    setConfig((current) => {
+      if (name === "accessRestricted") {
+        return checked
+          ? {
+              ...current,
+              accessScope:
+                current.accessScope === "global" ? "company" : current.accessScope,
+              accessScopeId: null,
+            }
+          : { ...current, accessScope: "global", accessScopeId: null };
+      }
+      if (name === "accessScope")
+        return { ...current, accessScope: value, accessScopeId: null };
+      return { ...current, accessScopeId: value ? Number(value) : null };
     });
   }
 
@@ -198,6 +263,23 @@ export default function SQLConnectionModal({
     e.stopPropagation();
     const form = new FormData(e.target);
     const connectionString = assembleConnectionString({ engine, ...config });
+    const connectionDescription = form.get("description")?.trim() || "";
+    const accessScope = config.accessScope || "global";
+    const accessScopeId =
+      accessScope === "global" ? null : Number(config.accessScopeId);
+
+    if (!connectionDescription) {
+      showToast("Descreva de qual sistema esta conexão traz os dados.", "error", {
+        clear: true,
+      });
+      return;
+    }
+    if (accessScope !== "global" && (!accessScopeId || !Number.isInteger(accessScopeId))) {
+      showToast("Selecione a empresa, workspace ou usuário do escopo restrito.", "error", {
+        clear: true,
+      });
+      return;
+    }
 
     // Slugify the database_id immediately to match backend behavior
     const slugifiedDatabaseId = slugify(form.get("name"));
@@ -233,6 +315,9 @@ export default function SQLConnectionModal({
       const connectionData = {
         engine,
         database_id: slugifiedDatabaseId,
+        description: connectionDescription,
+        accessScope,
+        accessScopeId,
         connectionString,
         schema: engine === "postgresql" ? config.schema : null,
       };
@@ -301,10 +386,10 @@ export default function SQLConnectionModal({
             <div className="border border-red-800 bg-zinc-800 light:bg-red-200/50 p-4 rounded-lg flex items-center gap-x-2 text-sm text-red-400 light:text-red-500">
               <WarningOctagon size={28} className="shrink-0" />
               <p>
-                <b>WARNING:</b> The SQL agent has been <i>instructed</i> to only
-                perform non-modifying queries. This <b>does not</b> prevent a
-                hallucination from still deleting data. Only connect with a user
-                who has <b>READ_ONLY</b> permissions.
+                <b>READ ONLY:</b> The server accepts only read queries and
+                limits SQL Server execution time and returned rows. This is not
+                a substitute for database permissions: connect with a user
+                that has <b>READ_ONLY</b> access.
               </p>
             </div>
 
@@ -340,6 +425,75 @@ export default function SQLConnectionModal({
             spellCheck={false}
             defaultValue={config.name || ""}
           />
+
+          <label className="flex flex-col gap-2 text-sm text-theme-text-primary">
+            Descrição da origem dos dados
+            <textarea
+              name="description"
+              value={config.description || ""}
+              onChange={(event) =>
+                setConfig((current) => ({
+                  ...current,
+                  description: event.target.value,
+                }))
+              }
+              maxLength={2000}
+              rows={3}
+              required
+              className="rounded-lg border border-white/10 bg-zinc-800 p-2 text-sm light:border-slate-300 light:bg-white"
+              placeholder="Ex.: Clinic é o sistema de gestão clínica. Esta conexão contém cadastros de médicos, agendas, exames e faturamento."
+            />
+            <span className="text-xs text-theme-text-secondary">
+              Esse contexto ajuda o agente a identificar quando consultar este sistema e será indexado no banco vetorial. Depois de validar, clique em Salvar no aviso no topo da página para persistir a alteração.
+            </span>
+          </label>
+
+          <div className="rounded-lg border border-white/10 p-3 light:border-slate-200">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="flex flex-col gap-1 text-sm text-theme-text-primary">
+                Disponibilidade da conexão
+                <select
+                  name="accessScope"
+                  value={config.accessScope || "global"}
+                  onChange={updateAccessScope}
+                  className="rounded-lg border border-white/10 bg-zinc-800 p-2 light:border-slate-300 light:bg-white"
+                >
+                  <option value="global">Todos os usuários com acesso ao SQL</option>
+                  <option value="company">Uma empresa</option>
+                  <option value="workspace">Um workspace</option>
+                  <option value="user">Um usuário</option>
+                </select>
+              </label>
+              {(config.accessScope || "global") !== "global" && (
+                <label className="flex flex-col gap-1 text-sm text-theme-text-primary">
+                  {targetLabelForScope}
+                  <select
+                    name="accessScopeId"
+                    value={config.accessScopeId || ""}
+                    onChange={updateAccessScope}
+                    required
+                    className="rounded-lg border border-white/10 bg-zinc-800 p-2 light:border-slate-300 light:bg-white"
+                  >
+                    <option value="">Selecione...</option>
+                    {availableScopeTargets.map((target) => (
+                      <option key={target.id} value={target.id}>
+                        {target.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <p className="text-xs text-theme-text-secondary sm:col-span-2">
+                {(config.accessScope || "global") === "global"
+                  ? "A conexão é limitada aos usuários que já podem usar o agente SQL."
+                  : config.accessScope === "company"
+                    ? "Disponível para membros da empresa quando conversarem em workspaces dessa empresa ou em workspaces sem empresa definida."
+                    : config.accessScope === "workspace"
+                      ? "Disponível somente nas conversas deste workspace."
+                      : "Disponível somente para o usuário selecionado, nos workspaces aos quais ele tem acesso."}
+              </p>
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <ModalInput
@@ -446,7 +600,7 @@ export default function SQLConnectionModal({
             form="sql-connection-form"
             disabled={isValidating}
           >
-            {isValidating ? "Validating..." : "Save connection"}
+            {isValidating ? "Validando conexão..." : "Validar e aplicar alterações"}
           </ModalPrimaryButton>
         </div>
       </form>

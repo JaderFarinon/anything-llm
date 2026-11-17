@@ -397,12 +397,12 @@ function apiWorkspaceEndpoints(app) {
               history: [
                 {
                   "role": "user",
-                  "content": "What is AnythingLLM?",
+                  "content": "What is AnyHealth?",
                   "sentAt": 1692851630
                 },
                 {
                   "role": "assistant",
-                  "content": "AnythingLLM is a platform that allows you to convert notes, PDFs, and other source materials into a chatbot. It ensures privacy, cites its answers, and allows multiple people to interact with the same documents simultaneously. It is particularly useful for businesses to enhance the visibility and readability of various written communications such as SOPs, contracts, and sales calls. You can try it out with a free trial to see if it meets your business needs.",
+                  "content": "AnyHealth is an internal AI assistant that answers questions using company documents and data, subject to the access permissions assigned to each account.",
                   "sources": [{"source": "object about source document and snippets used"}]
                 }
               ]
@@ -613,7 +613,7 @@ function apiWorkspaceEndpoints(app) {
        content: {
          "application/json": {
            example: {
-             message: "What is AnythingLLM?",
+             message: "What is AnyHealth?",
              mode:"automatic | query | chat",
              sessionId: "identifier-to-partition-chats-by-external-id",
              attachments: [
@@ -747,7 +747,7 @@ function apiWorkspaceEndpoints(app) {
        content: {
          "application/json": {
            example: {
-             message: "What is AnythingLLM?",
+             message: "What is AnyHealth?",
              mode: "automatic | query | chat",
              sessionId: "identifier-to-partition-chats-by-external-id",
              attachments: [

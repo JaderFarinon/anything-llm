@@ -4,6 +4,12 @@ const {
   resolveProviderConnector,
 } = require("../../../helpers");
 const { Deduplicator } = require("../utils/dedupe");
+const { User } = require("../../../../models/user");
+const {
+  listConnectedFolders,
+  formatConnectedFolders,
+  searchConnectedDriveWorkspaces,
+} = require("../../../chats/googleDriveContext");
 
 const memory = {
   name: "rag-memory",
@@ -19,7 +25,7 @@ const memory = {
           tracker: new Deduplicator(),
           name: this.name,
           description:
-            "Search your local documents and workspace files for relevant information, or store information to long-term memory. Use search to find answers in uploaded documents, embedded files, or previously stored memories. Use store only when explicitly asked to remember or save something.",
+            "Search documents and Google Drive sources the current user is allowed to access, list that user's connected Drive folders, or store long-term memory. Always search when a question asks about contracts, agreements, files, or other company documents; do not ask the user which folder to check when authorized Drive sources are connected. Use list_drive_folders for questions about connected folders. Use store only when explicitly asked to remember or save something.",
           examples: [
             {
               prompt: "Check my files for information about the project",
@@ -27,6 +33,10 @@ const memory = {
                 action: "search",
                 content: "<project information to search for>",
               }),
+            },
+            {
+              prompt: "List the Google Drive folders I can access",
+              call: JSON.stringify({ action: "list_drive_folders" }),
             },
             {
               prompt: "What do you know about Plato's motives?",
@@ -49,9 +59,9 @@ const memory = {
             properties: {
               action: {
                 type: "string",
-                enum: ["search", "store"],
+                enum: ["search", "store", "list_drive_folders"],
                 description:
-                  "The action we want to take to search for existing similar context or storage of new context.",
+                  "Search allowed document sources, list connected Google Drive folders, or store a memory when explicitly requested.",
               },
               content: {
                 type: "string",
@@ -73,6 +83,8 @@ const memory = {
               let response = "There was nothing to do.";
               if (action === "search") response = await this.search(content);
               if (action === "store") response = await this.store(content);
+              if (action === "list_drive_folders")
+                response = await this.listDriveFolders();
 
               this.tracker.trackRun(this.name, { action, content });
               return response;
@@ -84,6 +96,10 @@ const memory = {
           search: async function (query = "") {
             try {
               const workspace = this.super.handlerProps.invocation.workspace;
+              const invocation = this.super.handlerProps.invocation;
+              const user = invocation.user_id
+                ? await User.get({ id: Number(invocation.user_id) })
+                : null;
               const { connector: LLMConnector } =
                 await resolveProviderConnector({
                   workspace,
@@ -100,27 +116,54 @@ const memory = {
                   rerank: workspace?.vectorSearchMode === "rerank",
                 });
 
-              if (contextTexts.length === 0) {
+              const driveSearch = await searchConnectedDriveWorkspaces({
+                user,
+                currentWorkspace: workspace,
+                prompt: query,
+                LLMConnector,
+                VectorDb: vectorDB,
+              });
+              const allContextTexts = [
+                ...contextTexts,
+                ...driveSearch.contextTexts,
+              ];
+              const allSources = [...sources, ...driveSearch.sources];
+
+              if (allContextTexts.length === 0) {
                 this.super.introspect(
-                  `${this.caller}: I didn't find anything locally that would help answer this question.`
+                  `${this.caller}: No relevant content was found in the user's accessible documents.`
                 );
-                return "There was no additional context found for that query. We should search the web for this information.";
+                return "No relevant content was found in the documents and Google Drive sources available to this user. Do not claim to have scanned folders that are not connected or indexed, and do not ask the user to choose a folder unless a real missing detail prevents the search.";
               }
 
               this.super.introspect(
-                `${this.caller}: Found ${contextTexts.length} additional piece of context to help answer this question.`
+                `${this.caller}: Found ${allContextTexts.length} document excerpts to help answer this question.`
               );
 
-              this.super.addCitation?.(sources);
+              this.super.addCitation?.(allSources);
 
               let combinedText = "Additional context for query:\n";
-              for (const text of contextTexts) combinedText += text + "\n\n";
+              for (const text of allContextTexts) combinedText += text + "\n\n";
               return combinedText;
             } catch (error) {
               this.super.handlerProps.log(
                 `memory.search raised an error. ${error.message}`
               );
               return `An error was raised while searching the vector database. ${error.message}`;
+            }
+          },
+          listDriveFolders: async function () {
+            try {
+              const invocation = this.super.handlerProps.invocation;
+              const user = invocation.user_id
+                ? await User.get({ id: Number(invocation.user_id) })
+                : null;
+              return formatConnectedFolders(await listConnectedFolders(user));
+            } catch (error) {
+              this.super.handlerProps.log(
+                `memory.listDriveFolders raised an error. ${error.message}`
+              );
+              return "Não consegui carregar a lista de pastas conectadas do Google Drive agora.";
             }
           },
           store: async function (content = "") {

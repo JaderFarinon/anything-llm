@@ -66,17 +66,29 @@ class MSSQLConnector {
    * @returns {Promise<import(".").QueryResult>}
    */
   async runQuery(queryString = "", params = []) {
-    const result = { rows: [], count: 0, error: null };
+    const result = { rows: [], count: 0, error: null, truncated: false, columns: [] };
     try {
       if (!this.#connected) await this.connect();
 
       const request = this._client.request();
+      request.timeout = 30000;
       params.forEach((value, index) => {
         request.input(`p${index}`, value);
       });
-      const query = await request.query(queryString);
-      result.rows = query.recordset;
-      result.count = query.rowsAffected.reduce((sum, a) => sum + a, 0);
+      // SQL Server applies this row cap at the engine, which prevents the agent
+      // from materializing an unbounded result set before truncation.
+      const query = await request.query(`SET ROWCOUNT 201;\n${queryString};\nSET ROWCOUNT 0;`);
+      result.rows = query.recordset || [];
+      result.columns = Object.entries(query.recordset?.columns || {}).map(
+        ([name, column]) => ({
+          name,
+          type: column.type?.name || "unknown",
+          nullable: column.nullable,
+        })
+      );
+      result.truncated = result.rows.length > 200;
+      result.rows = result.rows.slice(0, 200);
+      result.count = (query.rowsAffected || []).reduce((sum, a) => sum + a, 0);
     } catch (err) {
       console.log(this.className, err);
       result.error = err.message;

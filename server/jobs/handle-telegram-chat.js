@@ -5,6 +5,8 @@ const TelegramBot = require("node-telegram-bot-api");
 const { log, conclude } = require("./helpers/index.js");
 const { Workspace } = require("../models/workspace");
 const { WorkspaceThread } = require("../models/workspaceThread");
+const { User } = require("../models/user");
+const { WorkspaceUser } = require("../models/workspaceUsers");
 const { streamResponse } = require("../utils/telegramBot/chat/stream");
 
 process.on("message", async (payload) => {
@@ -14,6 +16,8 @@ process.on("message", async (payload) => {
   const {
     botToken,
     chatId,
+    userId = null,
+    multiUserMode = false,
     workspaceSlug,
     threadSlug,
     message,
@@ -29,6 +33,8 @@ process.on("message", async (payload) => {
         log(args.length ? `${text} ${args.join(" ")}` : text),
     };
 
+    const user = userId ? await User.get({ id: Number(userId) }) : null;
+    if ((multiUserMode && (!user || user.suspended)) || (userId && (!user || user.suspended))) throw new Error("Telegram account is no longer authorized.");
     const workspace = await Workspace.get({ slug: workspaceSlug });
     if (!workspace) {
       await bot.sendMessage(
@@ -39,15 +45,19 @@ process.on("message", async (payload) => {
       return;
     }
 
-    const thread = threadSlug
-      ? await WorkspaceThread.get({ slug: threadSlug })
-      : null;
+    if (multiUserMode && user?.role !== "admin" && !(await WorkspaceUser.get({ user_id: user.id, workspace_id: workspace.id }))) {
+      await bot.sendMessage(chatId, "Você não tem acesso a este workspace. Use /switch para escolher um workspace liberado.");
+      conclude();
+      return;
+    }
+    const thread = threadSlug ? await WorkspaceThread.get({ slug: threadSlug, workspace_id: workspace.id, user_id: user?.id || null }) : null;
 
     await streamResponse({
       ctx,
       chatId,
       workspace,
       thread,
+      user,
       message,
       attachments,
       voiceResponse,

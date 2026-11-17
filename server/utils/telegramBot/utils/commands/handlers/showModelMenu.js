@@ -1,4 +1,5 @@
 const { Workspace } = require("../../../../../models/workspace");
+const { isTelegramAdmin } = require("../../access");
 const { resolveWorkspaceProvider } = require("../../index");
 const {
   getCustomModels,
@@ -14,6 +15,10 @@ const MODELS_PER_PAGE = 8;
  * @param {number|null} messageId - If provided, edits existing message instead of sending new one
  */
 async function showModelMenu(ctx, chatId, page = 0, messageId = null) {
+  if (!(await isTelegramAdmin(ctx, chatId))) {
+    await ctx.bot.sendMessage(chatId, "Somente administradores podem alterar o modelo do workspace.");
+    return;
+  }
   const pageNum = typeof page === "number" && !isNaN(page) ? page : 0;
   const state = ctx.getState(chatId);
   const workspace = await Workspace.get({ slug: state.workspaceSlug });

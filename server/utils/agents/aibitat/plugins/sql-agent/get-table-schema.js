@@ -4,6 +4,7 @@ module.exports.SqlAgentGetTableSchema = {
     const {
       listSQLConnections,
       getDBClient,
+      sqlConnectionScopeContext,
     } = require("./SQLConnectors/index.js");
 
     function formatQueryForDisplay(query, params = []) {
@@ -64,7 +65,9 @@ module.exports.SqlAgentGetTableSchema = {
           handler: async function ({ database_id = "", table_name = "" }) {
             this.super.handlerProps.log(`Using the sql-get-table-schema tool.`);
             try {
-              const databaseConfig = (await listSQLConnections()).find(
+              const databaseConfig = (await listSQLConnections(
+                sqlConnectionScopeContext(this.super)
+              )).find(
                 (db) => db.database_id === database_id
               );
               if (!databaseConfig) {

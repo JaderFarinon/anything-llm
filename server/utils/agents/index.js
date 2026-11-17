@@ -287,7 +287,7 @@ class AgentHandler {
         // lemond is booted on demand by the provider - it only has to be enabled on this instance.
         if (!require("../AiProviders/embeddedLemonade/config").isEnabled())
           throw new Error(
-            "The built-in LLM engine is not enabled. Set ENABLE_BUILT_IN_LLM=true when starting the AnythingLLM Docker container."
+            "The built-in LLM engine is not enabled. Set ENABLE_BUILT_IN_LLM=true when starting the AnyHealth Docker container."
           );
         break;
       case "omlx":

@@ -118,7 +118,16 @@ export default function ToolsSelector({
     if (!q) return availableTools;
     return availableTools
       .map((cat) => {
-        if (cat.name.toLowerCase().includes(q)) return cat;
+        const translatedCategory = t(
+          `scheduledJobs.modal.toolsCategories.${cat.category}`,
+          cat.name
+        );
+        if (
+          cat.name.toLowerCase().includes(q) ||
+          translatedCategory.toLowerCase().includes(q)
+        ) {
+          return cat;
+        }
         const items = (cat.items || []).filter(
           (item) =>
             item.name.toLowerCase().includes(q) ||
@@ -127,10 +136,13 @@ export default function ToolsSelector({
         return items.length ? { ...cat, items } : null;
       })
       .filter(Boolean);
-  }, [availableTools, search]);
+  }, [availableTools, search, t]);
 
   const isCategoryExpanded = (catId) =>
     search.trim() || expandedCategories[catId];
+
+  const categoryLabel = (cat) =>
+    t(`scheduledJobs.modal.toolsCategories.${cat.category}`, cat.name);
 
   const toggleCategory = (catId) => {
     setExpandedCategories((prev) => ({ ...prev, [catId]: !prev[catId] }));
@@ -225,7 +237,7 @@ export default function ToolsSelector({
                         <CaretRight size={12} weight="bold" />
                       )}
                       <span className="flex-1 text-left truncate flex items-center gap-1.5">
-                        {cat.name}
+                        {categoryLabel(cat)}
                         {cat.requiresSetup && (
                           <a
                             href={paths.settings.agentSkills()}

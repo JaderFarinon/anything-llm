@@ -4,8 +4,8 @@ const swaggerUi = require("swagger-ui-express");
 
 function faviconUrl() {
   return process.env.NODE_ENV === "production"
-    ? "/public/favicon.png"
-    : "http://localhost:3000/public/favicon.png";
+    ? "/public/anyhealth-mark.svg"
+    : "http://localhost:3000/public/anyhealth-mark.svg";
 }
 
 function useSwagger(app) {
@@ -21,7 +21,7 @@ function useSwagger(app) {
       fs.readFileSync(path.resolve(__dirname, "index.css")),
       fs.readFileSync(path.resolve(__dirname, "dark-swagger.css")),
     ].join("\n\n\n"),
-    customSiteTitle: "AnythingLLM Developer API Documentation",
+    customSiteTitle: "AnyHealth Developer API Documentation",
     customfavIcon: faviconUrl(),
   };
 

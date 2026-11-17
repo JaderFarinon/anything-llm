@@ -1,4 +1,5 @@
 const { isVerified } = require("../verification");
+const { SystemSettings } = require("../../../../models/systemSettings");
 const { resolveCallbackHandler } = require("./callbacks");
 
 /**
@@ -12,7 +13,16 @@ async function handleKeyboardQueryCallback(ctx, query, options = {}) {
   const messageId = query.message.message_id;
   const data = query.data;
 
-  if (!isVerified(ctx.config.approved_users, chatId)) {
+  let callbackCtx = ctx;
+  const multiUser = await SystemSettings.isMultiUserMode();
+  if (multiUser) {
+    const user = await ctx.getUser(chatId);
+    if (!user || user.suspended) {
+      await ctx.bot.answerCallbackQuery(query.id, { text: "Conta não vinculada." });
+      return;
+    }
+    callbackCtx = { ...ctx, getUser: async () => user };
+  } else if (!isVerified(ctx.config.approved_users, chatId)) {
     await ctx.bot.answerCallbackQuery(query.id, {
       text: "You are not approved.",
     });
@@ -22,7 +32,7 @@ async function handleKeyboardQueryCallback(ctx, query, options = {}) {
   try {
     const handler = resolveCallbackHandler(data);
     if (!handler) throw new Error(`Callback handler not found: ${data}`);
-    await handler({ ctx, chatId, query, messageId, data, ...options });
+    await handler({ ctx: callbackCtx, chatId, query, messageId, data, ...options });
   } catch (error) {
     ctx.log("Callback error:", error.message);
     await ctx.bot.answerCallbackQuery(query.id, {

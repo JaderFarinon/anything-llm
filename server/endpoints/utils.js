@@ -281,7 +281,7 @@ function getDeploymentVersion() {
  */
 function getAnythingLLMUserAgent() {
   const version = getDeploymentVersion() || "unknown";
-  return `AnythingLLM/${version}`;
+  return `AnyHealth/${version}`;
 }
 
 module.exports = {

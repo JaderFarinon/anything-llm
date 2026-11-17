@@ -2,6 +2,7 @@ import { useState, useEffect, useContext, useRef, useCallback } from "react";
 import ChatHistory from "./ChatHistory";
 import { CLEAR_ATTACHMENTS_EVENT, DndUploaderContext } from "./DnDWrapper";
 import PromptInput, {
+  OPEN_SQL_HELP_EVENT,
   PROMPT_INPUT_EVENT,
   PROMPT_INPUT_ID,
 } from "./PromptInput";
@@ -50,6 +51,12 @@ export default function ChatContainer({
   const greeting = useGreeting();
   const [loadingResponse, setLoadingResponse] = useState(false);
   const [chatHistory, setChatHistory] = useState(knownHistory);
+  const [sqlHelp, setSqlHelp] = useState({
+    connections: [],
+    driveFolders: [],
+    loadError: false,
+  });
+  const [sqlHelpOpen, setSqlHelpOpen] = useState(false);
   const [socketId, setSocketId] = useState(null);
   const [websocket, setWebsocket] = useState(null);
   const { files, parseAttachments } = useContext(DndUploaderContext);
@@ -57,6 +64,34 @@ export default function ChatContainer({
   const pendingMessageChecked = useRef(false);
   const pendingResetRef = useRef(false);
   const activeThreadSlug = threadSlug;
+
+  const reloadSQLHelp = useCallback(async () => {
+    setSqlHelp(await Workspace.sqlHelp(workspace.slug));
+  }, [workspace.slug]);
+
+  useEffect(() => {
+    let mounted = true;
+    Workspace.sqlHelp(workspace.slug).then((help) => {
+      if (mounted)
+        setSqlHelp(help || { connections: [], driveFolders: [], loadError: true });
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [workspace.slug]);
+
+  useEffect(() => {
+    function openSQLHelp() {
+      window.dispatchEvent(
+        new CustomEvent(PROMPT_INPUT_EVENT, {
+          detail: { messageContent: "" },
+        })
+      );
+      setSqlHelpOpen(true);
+    }
+    window.addEventListener(OPEN_SQL_HELP_EVENT, openSQLHelp);
+    return () => window.removeEventListener(OPEN_SQL_HELP_EVENT, openSQLHelp);
+  }, []);
 
   const isEmpty =
     chatHistory.length === 0 && !sessionStorage.getItem(PENDING_HOME_MESSAGE);
@@ -103,6 +138,14 @@ export default function ChatContainer({
     const currentMessage =
       document.getElementById(PROMPT_INPUT_ID)?.value || "";
     if (!currentMessage) return false;
+
+    if (currentMessage.trim().toLocaleLowerCase() === "/ajuda") {
+      clearPromptInputDraft(activeThreadSlug ?? workspace.slug);
+      setMessageEmit("");
+      setSqlHelpOpen(true);
+      return false;
+    }
+    setSqlHelpOpen(false);
 
     // Clear the localStorage draft for this thread/workspace so that if the
     // PromptInput remounts (empty→chat transition), it won't restore stale text
@@ -510,6 +553,10 @@ export default function ChatContainer({
                     sendCommand={sendCommand}
                     attachments={files}
                     centered={true}
+                    sqlHelp={sqlHelp}
+                    sqlHelpOpen={sqlHelpOpen}
+                    onRetrySQLHelp={reloadSQLHelp}
+                    onCloseSQLHelp={() => setSqlHelpOpen(false)}
                   />
                   <QuickActions
                     hasAvailableWorkspace={!!workspace}
@@ -576,6 +623,10 @@ export default function ChatContainer({
                   sendCommand={sendCommand}
                   attachments={files}
                   centered={false}
+                  sqlHelp={sqlHelp}
+                  sqlHelpOpen={sqlHelpOpen}
+                  onRetrySQLHelp={reloadSQLHelp}
+                  onCloseSQLHelp={() => setSqlHelpOpen(false)}
                 />
               </div>
             </div>

@@ -28,6 +28,16 @@ class BackgroundService {
 
   #alwaysRunJobs = [
     {
+      name: "sync-google-drive",
+      timeout: "30m",
+      interval: "1m",
+    },
+    {
+      name: "agent-daily-quality-report",
+      timeout: "5m",
+      interval: "1hr",
+    },
+    {
       name: "cleanup-orphan-documents",
       timeout: "1m",
       interval: "12hr",
@@ -273,10 +283,6 @@ class BackgroundService {
    */
   async #bootScheduledJobs() {
     const { ScheduledJob } = require("../../models/scheduledJob");
-    const { SystemSettings } = require("../../models/systemSettings");
-
-    // Scheduled jobs are only available in single-user mode.
-    if (await SystemSettings.isMultiUserMode()) return;
 
     const enabledJobs = await ScheduledJob.allEnabled();
 

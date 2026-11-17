@@ -45,7 +45,7 @@ class EmbeddedLemonadeLLM {
   constructor(embedder = null, modelPreference = null) {
     if (!isEnabled())
       throw new Error(
-        "The built-in LLM engine is not enabled. Set ENABLE_BUILT_IN_LLM=true when starting the AnythingLLM Docker container."
+        "The built-in LLM engine is not enabled. Set ENABLE_BUILT_IN_LLM=true when starting the AnyHealth Docker container."
       );
     this.className = "EmbeddedLemonadeLLM";
     this.model = modelPreference || process.env.EMBEDDED_LEMONADE_MODEL_PREF;
@@ -635,7 +635,7 @@ class EmbeddedLemonadeLLM {
     if (!response.ok)
       throw new Error(info?.error || `Could not find ${repo} on ${registry}.`);
     if (info.recipe && info.recipe !== "llamacpp")
-      throw new Error(`${repo} is not a GGUF model that AnythingLLM can run.`);
+      throw new Error(`${repo} is not a GGUF model that AnyHealth can run.`);
 
     const variants = (info.variants ?? []).map((v) => v.name);
     const quant =

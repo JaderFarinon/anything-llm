@@ -15,7 +15,7 @@ import MonoProviderIcon from "@/components/lib/MonoProviderIcon";
 import ModelTableLayout from "@/components/lib/ModelTable/layout";
 import ModelTableLoadingSkeleton from "@/components/lib/ModelTable/loading";
 import showToast from "@/utils/toast";
-import AnythingLLMIcon from "@/media/logo/anything-llm-icon.png";
+import AnyHealthIcon from "@/media/logo/anyhealth-mark.svg";
 import { LLM_PREFERENCE_CHANGED_EVENT } from "@/pages/GeneralSettings/LLMPreference";
 import EmbeddedLemonadeUtils from "./utils";
 
@@ -28,7 +28,7 @@ function embeddedLemonadeLLM({ onboarding = false } = {}) {
   return {
     name: "Built-in",
     value: "embedded_lemonade",
-    logo: AnythingLLMIcon,
+    logo: AnyHealthIcon,
     options: (settings) => (
       <EmbeddedLemonadeOptions settings={settings} onboarding={onboarding} />
     ),

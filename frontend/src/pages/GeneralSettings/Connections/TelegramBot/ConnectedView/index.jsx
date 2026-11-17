@@ -4,6 +4,7 @@ import ConnectedBotCard from "./ConnectedBotCard";
 import DetailsSection from "./DetailsSection";
 import UsersSection from "./UsersSection";
 import DisconnectedView from "./DisconnectedView";
+import LinkedUsersSection from "./LinkedUsersSection";
 
 export default function ConnectedView({
   config,
@@ -14,14 +15,17 @@ export default function ConnectedView({
   const [newToken, setNewToken] = useState("");
   const [pendingUsers, setPendingUsers] = useState([]);
   const [approvedUsers, setApprovedUsers] = useState([]);
+  const [linkedUsers, setLinkedUsers] = useState([]);
 
   const fetchUsers = useCallback(async () => {
-    const [pending, approved] = await Promise.all([
+    const [pending, approved, linked] = await Promise.all([
       Telegram.getPendingUsers(),
       Telegram.getApprovedUsers(),
+      Telegram.getLinkedUsers(),
     ]);
     setPendingUsers(pending?.users || []);
     setApprovedUsers(approved?.users || []);
+    setLinkedUsers(linked?.users || []);
   }, []);
 
   useEffect(() => {
@@ -45,11 +49,14 @@ export default function ConnectedView({
     <div className="flex flex-col gap-y-8 mt-8">
       <ConnectedBotCard config={config} />
       <DetailsSection config={config} onDisconnected={onDisconnected} />
-      <UsersSection
-        pendingUsers={pendingUsers}
-        approvedUsers={approvedUsers}
-        fetchUsers={fetchUsers}
-      />
+      <LinkedUsersSection users={linkedUsers} onRefresh={fetchUsers} />
+      {!config.multiUserMode && (
+        <UsersSection
+          pendingUsers={pendingUsers}
+          approvedUsers={approvedUsers}
+          fetchUsers={fetchUsers}
+        />
+      )}
     </div>
   );
 }

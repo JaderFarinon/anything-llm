@@ -81,7 +81,7 @@ class ContextWindowFinder {
 [WARNING] Model map cache is not found!
 Invalid context windows will be returned leading to inaccurate model responses
 or smaller context windows than expected.
-You can fix this by restarting AnythingLLM so the model map is re-pulled.
+You can fix this by restarting AnyHealth so the model map is refreshed.
 --------------------------------\x1b[0m`);
       return null;
     }

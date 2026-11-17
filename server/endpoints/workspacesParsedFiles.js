@@ -71,8 +71,8 @@ function workspaceParsedFilesEndpoints(app) {
     "/workspace/:slug/embed-parsed-file/:fileId",
     [
       validatedRequest,
-      // Embed is still an admin/manager only feature
-      flexUserRoleValid([ROLES.admin, ROLES.manager]),
+      // Embedding shared content is reserved for administrators
+      flexUserRoleValid([ROLES.admin]),
       validWorkspaceSlug,
     ],
     async function (request, response) {
@@ -122,7 +122,7 @@ function workspaceParsedFilesEndpoints(app) {
     "/workspace/:slug/move-parsed-files",
     [
       validatedRequest,
-      flexUserRoleValid([ROLES.admin, ROLES.manager]),
+      flexUserRoleValid([ROLES.admin]),
       validWorkspaceSlug,
     ],
     async function (request, response) {

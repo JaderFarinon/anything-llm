@@ -4,8 +4,9 @@ const { getType } = require("mime");
 const { v4 } = require("uuid");
 const { SystemSettings } = require("../../models/systemSettings");
 const { normalizePath, isWithin } = require(".");
-const LOGO_FILENAME = "anything-llm.png";
-const LOGO_FILENAME_DARK = "anything-llm-invert.png";
+const LOGO_FILENAME = "anyhealth-mark.svg";
+const LOGO_FILENAME_DARK = "anyhealth-mark.svg";
+const LEGACY_LOGO_FILENAMES = ["anything-llm.png", "anything-llm-invert.png"];
 
 /**
  * Checks if the filename is the default logo filename for dark or light mode.
@@ -13,7 +14,9 @@ const LOGO_FILENAME_DARK = "anything-llm-invert.png";
  * @returns {boolean} Whether the filename is the default logo filename.
  */
 function isDefaultFilename(filename) {
-  return [LOGO_FILENAME, LOGO_FILENAME_DARK].includes(filename);
+  return [LOGO_FILENAME, LOGO_FILENAME_DARK, ...LEGACY_LOGO_FILENAMES].includes(
+    filename
+  );
 }
 
 function validFilename(newFilename = "") {
@@ -35,7 +38,7 @@ async function determineLogoFilepath(defaultFilename = LOGO_FILENAME) {
   const basePath = process.env.STORAGE_DIR
     ? path.join(process.env.STORAGE_DIR, "assets")
     : path.join(__dirname, "../../storage/assets");
-  const defaultFilepath = path.join(basePath, defaultFilename);
+  const defaultFilepath = path.join(__dirname, "../../public", defaultFilename);
 
   if (currentLogoFilename && validFilename(currentLogoFilename)) {
     const customLogoPath = path.join(

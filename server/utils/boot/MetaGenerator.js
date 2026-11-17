@@ -27,8 +27,8 @@ class MetaGenerator {
   #customConfig = null;
 
   #defaultManifest = {
-    name: "AnythingLLM",
-    short_name: "AnythingLLM",
+    name: "AnyHealth",
+    short_name: "AnyHealth",
     display: "standalone",
     orientation: "portrait",
     start_url: "/",
@@ -53,27 +53,27 @@ class MetaGenerator {
     return [
       {
         tag: "link",
-        props: { type: "image/svg+xml", href: "/favicon.png" },
+        props: { type: "image/svg+xml", href: "/anyhealth-mark.svg" },
         content: null,
       },
       {
         tag: "title",
         props: null,
-        content: "AnythingLLM | Your personal LLM trained on anything",
+        content: "AnyHealth | IA interna da empresa",
       },
 
       {
         tag: "meta",
         props: {
           name: "title",
-          content: "AnythingLLM | Your personal LLM trained on anything",
+          content: "AnyHealth | IA interna da empresa",
         },
       },
       {
         tag: "meta",
         props: {
-          description: "title",
-          content: "AnythingLLM | Your personal LLM trained on anything",
+          name: "description",
+          content: "IA interna da empresa com acesso a documentos e dados corporativos.",
         },
       },
 
@@ -81,28 +81,27 @@ class MetaGenerator {
       { tag: "meta", props: { property: "og:type", content: "website" } },
       {
         tag: "meta",
-        props: { property: "og:url", content: "https://anythingllm.com" },
+        props: { property: "og:url", content: "https://anyhealth.qyvia.com.br" },
       },
       {
         tag: "meta",
         props: {
           property: "og:title",
-          content: "AnythingLLM | Your personal LLM trained on anything",
+          content: "AnyHealth | IA interna da empresa",
         },
       },
       {
         tag: "meta",
         props: {
           property: "og:description",
-          content: "AnythingLLM | Your personal LLM trained on anything",
+          content: "IA interna da empresa com acesso a documentos e dados corporativos.",
         },
       },
       {
         tag: "meta",
         props: {
           property: "og:image",
-          content:
-            "https://raw.githubusercontent.com/Mintplex-Labs/anything-llm/master/images/promo.png",
+          content: "/anyhealth-mark.svg",
         },
       },
 
@@ -113,32 +112,31 @@ class MetaGenerator {
       },
       {
         tag: "meta",
-        props: { property: "twitter:url", content: "https://anythingllm.com" },
+        props: { property: "twitter:url", content: "https://anyhealth.qyvia.com.br" },
       },
       {
         tag: "meta",
         props: {
           property: "twitter:title",
-          content: "AnythingLLM | Your personal LLM trained on anything",
+          content: "AnyHealth | IA interna da empresa",
         },
       },
       {
         tag: "meta",
         props: {
           property: "twitter:description",
-          content: "AnythingLLM | Your personal LLM trained on anything",
+          content: "IA interna da empresa com acesso a documentos e dados corporativos.",
         },
       },
       {
         tag: "meta",
         props: {
           property: "twitter:image",
-          content:
-            "https://raw.githubusercontent.com/Mintplex-Labs/anything-llm/master/images/promo.png",
+          content: "/anyhealth-mark.svg",
         },
       },
 
-      { tag: "link", props: { rel: "icon", href: "/favicon.png" } },
+      { tag: "link", props: { rel: "icon", href: "/anyhealth-mark.svg" } },
       { tag: "link", props: { rel: "apple-touch-icon", href: "/favicon.png" } },
 
       // PWA specific tags
@@ -216,14 +214,22 @@ class MetaGenerator {
   async #fetchConfg() {
     this.#log(`fetching custom meta tag settings...`);
     const { SystemSettings } = require("../../models/systemSettings");
-    const customTitle = await SystemSettings.getValueOrFallback(
+    const savedTitle = await SystemSettings.getValueOrFallback(
       { label: "meta_page_title" },
       null
     );
-    const faviconURL = await SystemSettings.getValueOrFallback(
+    const customTitle =
+      typeof savedTitle === "string" && /nexo|anything\s?llm/i.test(savedTitle)
+        ? null
+        : savedTitle;
+    const savedFaviconUrl = await SystemSettings.getValueOrFallback(
       { label: "meta_page_favicon" },
       null
     );
+    const faviconURL =
+      typeof savedFaviconUrl === "string" && /nexo|anything\s?llm/i.test(savedFaviconUrl)
+        ? null
+        : savedFaviconUrl;
 
     // If nothing defined - assume defaults.
     if (customTitle === null && faviconURL === null) {
@@ -245,7 +251,7 @@ class MetaGenerator {
             props: null,
             content:
               customTitle ??
-              "AnythingLLM | Your personal LLM trained on anything",
+              "AnyHealth | IA interna da empresa",
           };
         }
         // Override meta title
@@ -256,7 +262,7 @@ class MetaGenerator {
               name: "title",
               content:
                 customTitle ??
-                "AnythingLLM | Your personal LLM trained on anything",
+                "AnyHealth | IA interna da empresa",
             },
           };
         }
@@ -268,7 +274,7 @@ class MetaGenerator {
               property: "og:title",
               content:
                 customTitle ??
-                "AnythingLLM | Your personal LLM trained on anything",
+                "AnyHealth | IA interna da empresa",
             },
           };
         }
@@ -280,7 +286,7 @@ class MetaGenerator {
               property: "twitter:title",
               content:
                 customTitle ??
-                "AnythingLLM | Your personal LLM trained on anything",
+                "AnyHealth | IA interna da empresa",
             },
           };
         }
@@ -346,18 +352,21 @@ class MetaGenerator {
       const { SystemSettings } = require("../../models/systemSettings");
       const manifestName = await SystemSettings.getValueOrFallback(
         { label: "meta_page_title" },
-        "AnythingLLM"
+        "AnyHealth"
       );
-      const faviconURL = await SystemSettings.getValueOrFallback(
+      const savedFaviconURL = await SystemSettings.getValueOrFallback(
         { label: "meta_page_favicon" },
         null
       );
 
       let iconUrl = "/favicon.png";
-      if (faviconURL) {
+      if (
+        savedFaviconURL &&
+        !/nexo|anything\s?llm/i.test(savedFaviconURL)
+      ) {
         try {
-          new URL(faviconURL);
-          iconUrl = faviconURL;
+          new URL(savedFaviconURL);
+          iconUrl = savedFaviconURL;
         } catch {
           iconUrl = "/favicon.png";
         }

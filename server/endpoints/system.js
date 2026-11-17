@@ -10,7 +10,10 @@ const {
   getDocumentsByDocPaths,
 } = require("../utils/files");
 const { purgeDocument, purgeFolder } = require("../utils/files/purgeDocument");
-const { getVectorDbClass } = require("../utils/helpers");
+const {
+  getVectorDbClass,
+  resolveProviderConnector,
+} = require("../utils/helpers");
 const { updateENV, dumpENV } = require("../utils/helpers/updateENV");
 const {
   reqBody,
@@ -18,6 +21,7 @@ const {
   userFromSession,
   multiUserMode,
   queryParams,
+  safeJsonParse,
 } = require("../utils/http");
 const {
   handleAssetUpload,
@@ -46,6 +50,7 @@ const { getCustomModels } = require("../utils/helpers/customModels");
 const { WorkspaceChats } = require("../models/workspaceChats");
 const { WorkspaceThread } = require("../models/workspaceThread");
 const { WorkspaceParsedFiles } = require("../models/workspaceParsedFiles");
+const { Workspace } = require("../models/workspace");
 const {
   flexUserRoleValid,
   ROLES,
@@ -77,6 +82,12 @@ const { isReservedCommand } = require("../utils/chats");
 const { AgentSkillWhitelist } = require("../models/agentSkillWhitelist");
 const { Memory } = require("../models/memory");
 const { dummyHashCompare } = require("../utils/helpers/dummyHashCompare");
+const prisma = require("../utils/prisma");
+const {
+  REPORT_EVENT: AGENT_QUALITY_REPORT_EVENT,
+  utcDayRange,
+  buildDailyQualityReport,
+} = require("../utils/agentQuality");
 
 function systemEndpoints(app) {
   if (!app) return;
@@ -798,7 +809,11 @@ function systemEndpoints(app) {
             label: "custom_app_name",
           })
         )?.value ?? null;
-      response.status(200).json({ customAppName: customAppName });
+      const normalizedAppName =
+        typeof customAppName === "string" && /nexo|anything\s?llm/i.test(customAppName)
+          ? "AnyHealth"
+          : customAppName;
+      response.status(200).json({ customAppName: normalizedAppName });
     } catch (error) {
       console.error("Error fetching custom app name:", error);
       response.status(500).json({ message: "Internal server error" });
@@ -1003,8 +1018,7 @@ function systemEndpoints(app) {
   app.get("/system/is-default-logo", async (_, response) => {
     try {
       const currentLogoFilename = await SystemSettings.currentLogoFilename();
-      const isDefaultLogo =
-        !currentLogoFilename || currentLogoFilename === LOGO_FILENAME;
+      const isDefaultLogo = !currentLogoFilename || isDefaultFilename(currentLogoFilename);
       response.status(200).json({ isDefaultLogo });
     } catch (error) {
       console.error("Error processing the logo request:", error);
@@ -1174,6 +1188,446 @@ function systemEndpoints(app) {
       } catch (e) {
         console.error(e);
         response.sendStatus(500).end();
+      }
+    }
+  );
+
+  app.get(
+    "/system/agent-review/candidates",
+    [chatHistoryViewable, validatedRequest, flexUserRoleValid([ROLES.admin])],
+    async (_request, response) => {
+      try {
+        const chats = await WorkspaceChats.whereWithData(
+          { feedbackScore: false, include: true },
+          50,
+          0,
+          { id: "desc" }
+        );
+        response.json({
+          candidates: chats.map((chat) => ({
+            id: chat.id,
+            prompt: chat.prompt,
+            response: safeJsonParse(chat.response, {})?.text || "",
+            workspace: chat.workspace?.name || "",
+            username: chat.user?.username || "",
+            createdAt: chat.createdAt,
+          })),
+        });
+      } catch (error) {
+        console.error("Could not load agent review candidates:", error);
+        response.sendStatus(500);
+      }
+    }
+  );
+
+  app.get(
+    "/system/agent-review/suggestions",
+    [chatHistoryViewable, validatedRequest, flexUserRoleValid([ROLES.admin])],
+    async (_request, response) => {
+      try {
+        const [created, decisions] = await Promise.all([
+          EventLogs.where(
+            { event: "agent_sql_suggestion_created" },
+            100,
+            { id: "desc" }
+          ),
+          EventLogs.where(
+            { event: "agent_sql_suggestion_decided" },
+            500,
+            { id: "desc" }
+          ),
+        ]);
+        const decidedIds = new Set(
+          decisions
+            .map((event) => safeJsonParse(event.metadata, {})?.suggestionId)
+            .filter(Boolean)
+        );
+        const pending = [];
+        for (const event of created) {
+          const metadata = safeJsonParse(event.metadata, {});
+          if (!metadata.suggestionId || decidedIds.has(metadata.suggestionId))
+            continue;
+          const chat = await WorkspaceChats.get({ id: Number(metadata.chatId) });
+          const responseText = safeJsonParse(chat?.response, {})?.text || "";
+          pending.push({
+            id: event.id,
+            suggestionId: metadata.suggestionId,
+            chatId: metadata.chatId,
+            workspace: metadata.workspace || "",
+            prompt: chat?.prompt || "",
+            response: responseText,
+            suggestion: metadata.suggestion,
+            createdAt: event.occurredAt,
+          });
+        }
+        response.json({ suggestions: pending });
+      } catch (error) {
+        console.error("Could not load agent suggestions:", error);
+        response.sendStatus(500);
+      }
+    }
+  );
+
+  app.post(
+    "/system/agent-review/suggestions",
+    [chatHistoryViewable, validatedRequest, flexUserRoleValid([ROLES.admin])],
+    async (request, response) => {
+      try {
+        const { chatId } = reqBody(request);
+        const chat = await WorkspaceChats.get({
+          id: Number(chatId),
+          include: true,
+          feedbackScore: false,
+        });
+        if (!chat)
+          return response.status(404).json({
+            success: false,
+            error: "Only a negatively rated saved answer can be reviewed.",
+          });
+
+        const workspace = await Workspace.get({ id: chat.workspaceId });
+        if (!workspace)
+          return response.status(404).json({ success: false, error: "Workspace not found." });
+
+        const settingsValue = await SystemSettings.getValueOrFallback(
+          { label: "agent_sql_connections" },
+          "[]"
+        );
+        const connections = safeJsonParse(settingsValue, []);
+        const catalog = (Array.isArray(connections) ? connections : []).flatMap(
+          (connection) =>
+            (Array.isArray(connection.queries) ? connection.queries : []).map(
+              ({ id, title, description, examples = [], parameters = [] }) => ({
+                database_id: connection.database_id,
+                id,
+                title,
+                description,
+                examples: Array.isArray(examples) ? examples : [],
+                parameters: (Array.isArray(parameters) ? parameters : []).map(
+                  ({ name, type, description, required }) => ({
+                    name,
+                    type,
+                    description,
+                    required,
+                  })
+                ),
+              })
+            )
+        );
+        if (!catalog.length)
+          return response.status(400).json({
+            success: false,
+            error: "Add approved SQL queries before generating query-matching suggestions.",
+          });
+
+        const user = chat.user_id ? await User.get({ id: chat.user_id }) : null;
+        const thread = chat.thread_id
+          ? await WorkspaceThread.get({ id: chat.thread_id })
+          : null;
+        const { connector } = await resolveProviderConnector({
+          workspace,
+          prompt: chat.prompt,
+          user,
+          thread,
+          attachments: [],
+        });
+        if (!connector?.getChatCompletion)
+          return response.status(400).json({
+            success: false,
+            error: "The workspace does not have a usable language model configured.",
+          });
+
+        const savedResponse = safeJsonParse(chat.response, {})?.text || "";
+        const completion = await connector.getChatCompletion(
+          [
+            {
+              role: "system",
+              content:
+                "You review a user question and a negatively rated AI answer to improve routing to existing, administrator-approved SQL queries. Never propose or write SQL. Do not claim that the answer is wrong for certain; infer only a likely query-selection or wording improvement. Return one JSON object with keys: database_id, query_id, rationale, suggestedDescription, exampleQuestions. Choose database_id and query_id exactly from the supplied catalog. suggestedDescription must be a short usage description (or an empty string if unchanged); exampleQuestions must be 1 to 8 short natural-language phrases that users could ask. Do not include SQL results or credentials.",
+            },
+            {
+              role: "user",
+              content: JSON.stringify({
+                question: String(chat.prompt || "").slice(0, 4000),
+                answerMarkedIncorrect: String(savedResponse).slice(0, 6000),
+                approvedQueryCatalog: catalog,
+              }),
+            },
+          ],
+          { user }
+        );
+        const rawText = String(completion?.textResponse || "");
+        const jsonText = rawText.match(/\{[\s\S]*\}/)?.[0];
+        const proposal = jsonText ? safeJsonParse(jsonText, null) : null;
+        if (!proposal)
+          return response.status(502).json({
+            success: false,
+            error: "The model did not return a usable suggestion. Try again or edit the query manually.",
+          });
+
+        const matchedQuery = catalog.find(
+          (query) =>
+            query.database_id === proposal.database_id &&
+            query.id === proposal.query_id
+        );
+        const suggestedDescription = String(
+          proposal.suggestedDescription || ""
+        )
+          .trim()
+          .slice(0, 2000);
+        const exampleQuestions = Array.isArray(proposal.exampleQuestions)
+          ? [
+              ...new Set(
+                proposal.exampleQuestions
+                  .map((example) => String(example).trim().slice(0, 240))
+                  .filter(Boolean)
+              ),
+            ].slice(0, 8)
+          : [];
+        if (
+          !matchedQuery ||
+          (!suggestedDescription && !exampleQuestions.length)
+        )
+          return response.status(502).json({
+            success: false,
+            error: "The model returned a suggestion that does not match an approved query.",
+          });
+
+        const suggestion = {
+          databaseId: matchedQuery.database_id,
+          queryId: matchedQuery.id,
+          queryTitle: matchedQuery.title,
+          rationale: String(proposal.rationale || "").slice(0, 1000),
+          previousDescription: matchedQuery.description,
+          suggestedDescription,
+          previousExamples: matchedQuery.examples,
+          exampleQuestions,
+        };
+        const suggestionId = v4();
+        const logged = await EventLogs.logEvent(
+          "agent_sql_suggestion_created",
+          {
+            suggestionId,
+            chatId: chat.id,
+            workspace: workspace.name,
+            suggestion,
+          },
+          (await userFromSession(request, response))?.id
+        );
+        if (!logged.eventLog)
+          return response.status(500).json({
+            success: false,
+            error: "Could not save the suggestion for review.",
+          });
+        response.json({ success: true, suggestionId });
+      } catch (error) {
+        console.error("Could not generate agent suggestion:", error);
+        response.status(500).json({
+          success: false,
+          error: "Could not generate a suggestion from this answer.",
+        });
+      }
+    }
+  );
+
+  app.post(
+    "/system/agent-review/suggestions/:eventId/decision",
+    [chatHistoryViewable, validatedRequest, flexUserRoleValid([ROLES.admin])],
+    async (request, response) => {
+      try {
+        const eventId = Number(request.params.eventId);
+        const { decision } = reqBody(request);
+        if (!Number.isInteger(eventId) || !["approve", "reject"].includes(decision))
+          return response.status(400).json({ success: false, error: "Invalid review decision." });
+
+        const [sourceEvent] = await EventLogs.where(
+          { id: eventId, event: "agent_sql_suggestion_created" },
+          1
+        );
+        if (!sourceEvent)
+          return response.status(404).json({ success: false, error: "Suggestion not found." });
+        const source = safeJsonParse(sourceEvent.metadata, {});
+        if (!source.suggestionId || !source.suggestion)
+          return response.status(400).json({ success: false, error: "Suggestion data is invalid." });
+        const decisions = await EventLogs.where(
+          { event: "agent_sql_suggestion_decided" },
+          500
+        );
+        if (
+          decisions.some(
+            (event) =>
+              safeJsonParse(event.metadata, {})?.suggestionId ===
+              source.suggestionId
+          )
+        )
+          return response.status(409).json({ success: false, error: "Suggestion was already reviewed." });
+
+        if (decision === "approve") {
+          const suggestion = source.suggestion;
+          const connections = await SystemSettings.getSQLConnections();
+          const connection = connections.find(
+            (item) => item.database_id === suggestion.databaseId
+          );
+          const query = connection?.queries?.find(
+            (item) => item.id === suggestion.queryId
+          );
+          if (!connection || !query)
+            return response.status(409).json({ success: false, error: "The approved query no longer exists." });
+
+          const examples = Array.isArray(query.examples) ? query.examples : [];
+          const updatedQuery = {
+            ...query,
+            description:
+              String(suggestion.suggestedDescription || "").trim() ||
+              query.description,
+            examples: [
+              ...new Set([
+                ...examples,
+                ...(Array.isArray(suggestion.exampleQuestions)
+                  ? suggestion.exampleQuestions
+                  : []),
+              ]),
+            ].slice(0, 20),
+          };
+          const saveResult = await SystemSettings.updateSettings({
+            agent_sql_connections: JSON.stringify([
+              {
+                action: "queries",
+                database_id: connection.database_id,
+                queries: connection.queries.map((item) =>
+                  item.id === query.id ? updatedQuery : item
+                ),
+              },
+            ]),
+          });
+          if (!saveResult.success)
+            return response.status(500).json({
+              success: false,
+              error: saveResult.error || "Could not apply the suggestion.",
+            });
+        }
+
+        const reviewer = await userFromSession(request, response);
+        await EventLogs.logEvent(
+          "agent_sql_suggestion_decided",
+          {
+            suggestionId: source.suggestionId,
+            sourceEventId: sourceEvent.id,
+            decision,
+            databaseId: source.suggestion.databaseId,
+            queryId: source.suggestion.queryId,
+          },
+          reviewer?.id
+        );
+        response.json({ success: true, decision });
+      } catch (error) {
+        console.error("Could not apply agent suggestion:", error);
+        response.status(500).json({ success: false, error: "Could not save the review decision." });
+      }
+    }
+  );
+
+  app.get(
+    "/system/agent-quality/interactions",
+    [chatHistoryViewable, validatedRequest, flexUserRoleValid([ROLES.admin])],
+    async (request, response) => {
+      try {
+        const { start, end, date } = utcDayRange(request.query.date);
+        const offset = Math.max(0, Number(request.query.offset) || 0);
+        const limit = Math.min(50, Math.max(1, Number(request.query.limit) || 25));
+        const where = {
+          include: true,
+          createdAt: { gte: start, lt: end },
+        };
+        const [chats, total] = await Promise.all([
+          prisma.workspace_chats.findMany({
+            where,
+            orderBy: { createdAt: "desc" },
+            skip: offset * limit,
+            take: limit,
+          }),
+          prisma.workspace_chats.count({ where }),
+        ]);
+        const workspaceIds = [...new Set(chats.map((chat) => chat.workspaceId))];
+        const userIds = [...new Set(chats.map((chat) => chat.user_id).filter(Boolean))];
+        const [workspaces, users] = await Promise.all([
+          workspaceIds.length
+            ? prisma.workspaces.findMany({ where: { id: { in: workspaceIds } }, select: { id: true, name: true } })
+            : [],
+          userIds.length
+            ? prisma.users.findMany({ where: { id: { in: userIds } }, select: { id: true, username: true } })
+            : [],
+        ]);
+        const workspaceNames = new Map(workspaces.map((item) => [item.id, item.name]));
+        const usernames = new Map(users.map((item) => [item.id, item.username]));
+        response.json({
+          date,
+          total,
+          offset,
+          limit,
+          interactions: chats.map((chat) => {
+            const data = safeJsonParse(chat.response, {});
+            return {
+              id: chat.id,
+              prompt: chat.prompt,
+              response: data?.text || "",
+              sources: Array.isArray(data?.sources)
+                ? data.sources.map((source) => ({
+                    title: source?.title || source?.name || source?.source || "Fonte",
+                    type: source?.sourceType || source?.type || source?.provider || "",
+                  }))
+                : [],
+              duration: Number.isFinite(Number(data?.metrics?.duration))
+                ? Number(data.metrics.duration)
+                : null,
+              requestDuration: Number.isFinite(Number(data?.metrics?.requestDurationMs))
+                ? Number(data.metrics.requestDurationMs) / 1000
+                : null,
+              feedbackScore: chat.feedbackScore,
+              createdAt: chat.createdAt,
+              workspace: workspaceNames.get(chat.workspaceId) || "Workspace removido",
+              username: usernames.get(chat.user_id) || (chat.api_session_id ? "API" : "Usuário desconhecido"),
+            };
+          }),
+        });
+      } catch (error) {
+        console.error("Could not load agent quality interactions:", error);
+        response.status(400).json({ success: false, error: error.message });
+      }
+    }
+  );
+
+  app.get(
+    "/system/agent-quality/reports",
+    [chatHistoryViewable, validatedRequest, flexUserRoleValid([ROLES.admin])],
+    async (_request, response) => {
+      try {
+        const events = await EventLogs.where(
+          { event: AGENT_QUALITY_REPORT_EVENT },
+          90,
+          { occurredAt: "desc" }
+        );
+        response.json({
+          reports: events.map((event) => safeJsonParse(event.metadata, {})),
+        });
+      } catch (error) {
+        console.error("Could not load agent quality reports:", error);
+        response.sendStatus(500);
+      }
+    }
+  );
+
+  app.post(
+    "/system/agent-quality/reports",
+    [chatHistoryViewable, validatedRequest, flexUserRoleValid([ROLES.admin])],
+    async (request, response) => {
+      try {
+        const { date } = reqBody(request);
+        const report = await buildDailyQualityReport(date);
+        response.json({ success: true, report });
+      } catch (error) {
+        console.error("Could not generate agent quality report:", error);
+        response.status(400).json({ success: false, error: error.message });
       }
     }
   );
@@ -1606,6 +2060,79 @@ function systemEndpoints(app) {
         response.status(500).json({
           success: false,
           error: `Unable to connect to ${engine}. Please verify your connection details.`,
+        });
+      }
+    }
+  );
+
+  app.post(
+    "/system/test-sql-query",
+    [validatedRequest, flexUserRoleValid([ROLES.admin])],
+    async (request, response) => {
+      const { database_id, sql, parameters = [], values = {} } = reqBody(request);
+      try {
+        if (!database_id || !sql) {
+          return response.status(400).json({
+            success: false,
+            error: "A database and SELECT query are required.",
+          });
+        }
+
+        const connections = await SystemSettings.getSQLConnections();
+        const connection = connections.find(
+          (item) => item.database_id === database_id
+        );
+        if (!connection) {
+          return response.status(404).json({
+            success: false,
+            error: "The SQL connection was not found.",
+          });
+        }
+
+        const { prepareSavedQuery } = require(
+          "../utils/agents/aibitat/plugins/sql-agent/query-template"
+        );
+        const { getDBClient } = require(
+          "../utils/agents/aibitat/plugins/sql-agent/SQLConnectors"
+        );
+        const prepared = prepareSavedQuery({
+          engine: connection.engine,
+          sql,
+          parameters,
+          values,
+        });
+        const result = await getDBClient(connection.engine, connection).runQuery(
+          prepared.query,
+          prepared.params
+        );
+        if (result.error) {
+          return response.status(400).json({
+            success: false,
+            error: result.error,
+          });
+        }
+
+        const rows = Array.isArray(result.rows) ? result.rows : [];
+        const columns = Array.isArray(result.columns) && result.columns.length
+          ? result.columns
+          : Object.keys(rows[0] || {}).map((name) => ({
+              name,
+              type:
+                rows.find((row) => row?.[name] !== null && row?.[name] !== undefined)?.[name]?.constructor?.name ||
+                typeof rows.find((row) => row?.[name] !== null && row?.[name] !== undefined)?.[name] ||
+                "unknown",
+            }));
+        return response.status(200).json({
+          success: true,
+          columns,
+          rows: rows.slice(0, 20),
+          count: rows.length,
+          truncated: rows.length > 20 || result.truncated === true,
+        });
+      } catch (error) {
+        return response.status(400).json({
+          success: false,
+          error: error.message || "Unable to test this SQL query.",
         });
       }
     }

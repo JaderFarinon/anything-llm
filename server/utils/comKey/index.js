@@ -61,7 +61,7 @@ class CommunicationKey {
       keyPair.publicKey
     );
     this.log(
-      "RSA key pair generated for signed payloads within AnythingLLM services."
+      "RSA key pair generated for signed payloads within AnyHealth services."
     );
   }
 

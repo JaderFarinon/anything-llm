@@ -17,6 +17,7 @@ function setDefaultFormState(job) {
     schedule: job?.schedule || "0 9 * * *",
     scheduleMode: "builder",
     selectedTools: job?.tools ? safeJsonParse(job.tools, []) : [],
+    selectedTelegramRecipientIds: job?.telegramRecipientIds ? safeJsonParse(job.telegramRecipientIds, []) : [],
   };
 }
 
@@ -25,6 +26,9 @@ export default function JobFormModal({ job = null, onClose, onSaved }) {
   const isEditing = !!job;
   const [form, setForm] = useState(setDefaultFormState(job));
   const [availableTools, setAvailableTools] = useState([]);
+  const [telegramUsers, setTelegramUsers] = useState([]);
+  const [telegramUsersLoading, setTelegramUsersLoading] = useState(true);
+  const [telegramUsersError, setTelegramUsersError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({
     name: false,
@@ -41,6 +45,16 @@ export default function JobFormModal({ job = null, onClose, onSaved }) {
     ScheduledJobs.availableTools().then(({ tools }) => {
       setAvailableTools(tools || []);
     });
+    ScheduledJobs.linkedTelegramUsers()
+      .then(({ users, error }) => {
+        setTelegramUsers(users || []);
+        setTelegramUsersError(Boolean(error));
+        setTelegramUsersLoading(false);
+      })
+      .catch(() => {
+        setTelegramUsersError(true);
+        setTelegramUsersLoading(false);
+      });
   }, []);
 
   const handleChange = (e) => {
@@ -80,6 +94,7 @@ export default function JobFormModal({ job = null, onClose, onSaved }) {
       prompt: form.prompt.trim(),
       schedule: form.schedule.trim(),
       tools: form.selectedTools,
+      telegramRecipientIds: form.selectedTelegramRecipientIds,
     };
 
     const result = isEditing
@@ -134,6 +149,66 @@ export default function JobFormModal({ job = null, onClose, onSaved }) {
           onScheduleChange={handleScheduleChange}
           onModeChange={handleModeChange}
         />
+
+        <section className="flex flex-col gap-2 rounded-lg border border-zinc-700 light:border-slate-300 p-3">
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-100 light:text-slate-900">
+              {t("scheduledJobs.modal.deliveryTitle")}
+            </h3>
+            <p className="text-xs text-zinc-400 light:text-slate-600 mt-1">
+              {t("scheduledJobs.modal.deliveryDescription")}
+            </p>
+          </div>
+          <span className="text-sm font-medium text-zinc-200 light:text-slate-800">
+            {t("scheduledJobs.modal.telegram")}
+          </span>
+          {telegramUsersLoading ? (
+            <p className="text-sm text-zinc-400 light:text-slate-600">
+              {t("scheduledJobs.modal.telegramLoading")}
+            </p>
+          ) : telegramUsersError ? (
+            <p role="alert" className="text-sm text-red-400">
+              {t("scheduledJobs.modal.telegramLoadError")}
+            </p>
+          ) : telegramUsers.length === 0 ? (
+            <p className="text-sm text-zinc-400 light:text-slate-600">
+              {t("scheduledJobs.modal.telegramNoRecipients")}
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {telegramUsers.map((recipient) => {
+                const selected = form.selectedTelegramRecipientIds
+                  .map(Number)
+                  .includes(Number(recipient.id));
+                return (
+                  <label
+                    key={recipient.id}
+                    className="flex items-center gap-2 text-sm text-zinc-200 light:text-slate-800 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          selectedTelegramRecipientIds: event.target.checked
+                            ? [
+                                ...prev.selectedTelegramRecipientIds,
+                                recipient.id,
+                              ]
+                            : prev.selectedTelegramRecipientIds.filter(
+                                (id) => Number(id) !== Number(recipient.id)
+                              ),
+                        }))
+                      }
+                    />
+                    {recipient.username}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
         {availableTools.length > 0 && (
           <ToolsSelector

@@ -106,6 +106,10 @@ const ScheduledJobs = {
       }));
   },
 
+  linkedTelegramUsers: async function () {
+    return await fetch(`${API_BASE}/telegram/linked-users`, { headers: baseHeaders() }).then((res) => res.json()).catch(() => ({ users: [] }));
+  },
+
   availableTools: async function () {
     return await fetch(`${API_BASE}/scheduled-jobs/available-tools`, {
       headers: baseHeaders(),

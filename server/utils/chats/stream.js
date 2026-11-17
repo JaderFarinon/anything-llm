@@ -7,6 +7,15 @@ const { addChatCostToMetrics } = require("../helpers/modelPricing");
 const { writeResponseChunk } = require("../helpers/chat/responses");
 const { abortConnectorOnClientDisconnect } = require("../helpers/abortSignals");
 const { grepAgents } = require("./agents");
+const { SystemSettings } = require("../../models/systemSettings");
+const { safeJsonParse } = require("../http");
+const {
+  isGoogleDriveFolderListRequest,
+  isGoogleDriveDocumentLookup,
+  listConnectedFolders,
+  formatConnectedFolders,
+  searchConnectedDriveWorkspaces,
+} = require("./googleDriveContext");
 const {
   grepCommand,
   VALID_COMMANDS,
@@ -21,6 +30,48 @@ const {
 
 const VALID_CHAT_MODE = ["automatic", "chat", "query"];
 
+function isSQLDataLookupRequest(prompt = "") {
+  const text = String(prompt)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR");
+  const asksForData =
+    /\b(quais?|liste|listar|lista|mostre|mostrar|traga|traz|buscar|busca|consultar|consulta|quanto|valor|tem|temos|atende|codigo|horario|disponivel|faturad[oa]s?|faturamento)\b/.test(
+      text
+    );
+  const mentionsSqlDomain =
+    /\b(clinic|sql|medicos?|exames?|agendas?|convenios?|procedimentos?|setores?|pacientes?|tuss)\b/.test(
+      text
+    );
+  return asksForData && mentionsSqlDomain;
+}
+
+async function canAutomaticallyUseSqlAgent(user, workspace) {
+  if (!workspace || workspace.chatMode !== "automatic") return false;
+  try {
+    const enabledSkills = safeJsonParse(
+      await SystemSettings.getValueOrFallback(
+        { label: "default_agent_skills" },
+        "[]"
+      ),
+      []
+    );
+    if (!enabledSkills.includes("sql-agent")) return false;
+
+    const { listSQLConnections } = require("../agents/aibitat/plugins/sql-agent/SQLConnectors");
+    const connections = await listSQLConnections({
+      userId: user?.id ?? null,
+      workspaceId: workspace.id,
+    });
+    return connections.some(
+      (connection) => Array.isArray(connection.queries) && connection.queries.length > 0
+    );
+  } catch (error) {
+    console.error("Could not resolve automatic SQL agent access:", error.message);
+    return false;
+  }
+}
+
 async function streamChatWithWorkspace(
   response,
   workspace,
@@ -32,6 +83,7 @@ async function streamChatWithWorkspace(
   sessionReasoningEffort = null
 ) {
   const uuid = uuidv4();
+  const requestStartedAt = Date.now();
   // Routed workspaces show no reasoning controls, so a stored effort is
   // never applied to whichever model the router picks.
   if (usesModelRouter(workspace)) sessionReasoningEffort = null;
@@ -51,18 +103,63 @@ async function streamChatWithWorkspace(
     return;
   }
 
-  // If is agent enabled chat we will exit this flow early.
-  const isAgentChat = await grepAgents({
-    uuid,
-    response,
-    message: updatedMessage,
-    user,
-    workspace,
-    thread,
-    attachments,
-    reasoningEffort: sessionReasoningEffort,
-  });
-  if (isAgentChat) return;
+  // Folder inventory is application data, not an LLM guess. Answer directly
+  // from the user's Google Drive connections so the model cannot invent paths
+  // or ask the user to repeat scope preferences.
+  if (isGoogleDriveFolderListRequest(updatedMessage)) {
+    let textResponse;
+    try {
+      textResponse = formatConnectedFolders(
+        await listConnectedFolders(user)
+      );
+    } catch (error) {
+      console.error("Google Drive folder listing failed:", error.message);
+      textResponse =
+        "Não consegui carregar as pastas conectadas do Google Drive agora.";
+    }
+    await WorkspaceChats.new({
+      workspaceId: workspace.id,
+      prompt: message,
+      response: { text: textResponse, sources: [], type: chatMode, attachments },
+      threadId: thread?.id || null,
+      include: true,
+      user,
+    });
+    writeResponseChunk(response, {
+      id: uuid,
+      type: "textResponse",
+      textResponse,
+      sources: [],
+      attachments,
+      close: true,
+      error: null,
+    });
+    return;
+  }
+
+  // Document questions must pass through the permission-aware retrieval path
+  // below before an agent can answer. Otherwise automatic/native agent routing
+  // can skip Drive retrieval entirely and incorrectly claim that Drive is not
+  // connected. The normal chat path still uses the selected model and receives
+  // the retrieved excerpts and citations.
+  const driveDocumentLookup = isGoogleDriveDocumentLookup(updatedMessage);
+  const sqlDataLookup = isSQLDataLookupRequest(updatedMessage);
+  const forceSqlAgent =
+    sqlDataLookup && (await canAutomaticallyUseSqlAgent(user, workspace));
+  if (!driveDocumentLookup || forceSqlAgent) {
+    const isAgentChat = await grepAgents({
+      uuid,
+      response,
+      message: updatedMessage,
+      user,
+      workspace,
+      thread,
+      attachments,
+      reasoningEffort: sessionReasoningEffort,
+      forceAgent: forceSqlAgent,
+    });
+    if (isAgentChat) return;
+  }
 
   const {
     connector: LLMConnector,
@@ -105,13 +202,29 @@ async function streamChatWithWorkspace(
   const messageLimit = workspace?.openAiHistory || 20;
   const hasVectorizedSpace = await VectorDb.hasNamespace(workspace.slug);
   const embeddingsCount = await VectorDb.namespaceCount(workspace.slug);
+  const driveSearch = driveDocumentLookup
+    ? await searchConnectedDriveWorkspaces({
+        user,
+        currentWorkspace: workspace,
+        prompt: updatedMessage,
+        LLMConnector,
+        VectorDb,
+      })
+    : { contextTexts: [], sources: [], folders: [], searched: false };
 
   // User is trying to query-mode chat a workspace that has no data in it - so
   // we should exit early as no information can be found under these conditions.
-  if ((!hasVectorizedSpace || embeddingsCount === 0) && chatMode === "query") {
-    const textResponse =
-      workspace?.queryRefusalResponse ??
-      "There is no relevant information in this workspace to answer your query.";
+  if (
+    (!hasVectorizedSpace || embeddingsCount === 0) &&
+    chatMode === "query" &&
+    driveSearch.contextTexts.length === 0
+  ) {
+    const textResponse = isGoogleDriveDocumentLookup(updatedMessage)
+      ? driveSearch.folders.length
+        ? "Não encontrei documentos relevantes nas pastas aprovadas e indexadas do Google Drive que estão disponíveis para sua conta."
+        : "Não há pastas aprovadas do Google Drive disponíveis para pesquisa nesta conta."
+      : workspace?.queryRefusalResponse ??
+        "There is no relevant information in this workspace to answer your query.";
     writeResponseChunk(response, {
       id: uuid,
       type: "textResponse",
@@ -236,15 +349,27 @@ async function streamChatWithWorkspace(
   // If a past citation was used to answer the question - that is visible in the history so it logically makes sense
   // and does not appear to the user that a new response used information that is otherwise irrelevant for a given prompt.
   // TLDR; reduces GitHub issues for "LLM citing document that has no answer in it" while keep answers highly accurate.
-  contextTexts = [...contextTexts, ...filledSources.contextTexts];
-  sources = [...sources, ...vectorSearchResults.sources];
+  contextTexts = [
+    ...contextTexts,
+    ...filledSources.contextTexts,
+    ...driveSearch.contextTexts,
+  ];
+  sources = [...sources, ...vectorSearchResults.sources, ...driveSearch.sources];
+
+  const noDriveResults =
+    driveDocumentLookup &&
+    driveSearch.searched &&
+    contextTexts.length === 0;
 
   // If in query mode and no context chunks are found from search, backfill, or pins -  do not
   // let the LLM try to hallucinate a response or use general knowledge and exit early
-  if (chatMode === "query" && contextTexts.length === 0) {
-    const textResponse =
-      workspace?.queryRefusalResponse ??
-      "There is no relevant information in this workspace to answer your query.";
+  if (noDriveResults || (chatMode === "query" && contextTexts.length === 0)) {
+    const textResponse = noDriveResults
+      ? driveSearch.folders.length
+        ? "Não encontrei documentos relevantes nas pastas aprovadas e indexadas do Google Drive que estão disponíveis para sua conta."
+        : "Não há pastas aprovadas do Google Drive disponíveis para pesquisa nesta conta."
+      : workspace?.queryRefusalResponse ??
+        "There is no relevant information in this workspace to answer your query.";
     writeResponseChunk(response, {
       id: uuid,
       type: "textResponse",
@@ -264,7 +389,7 @@ async function streamChatWithWorkspace(
         attachments,
       },
       threadId: thread?.id || null,
-      include: false,
+      include: chatMode === "query",
       user,
     });
     return;
@@ -273,12 +398,15 @@ async function streamChatWithWorkspace(
   // Compress & Assemble message to ensure prompt passes token limit with room for response
   // and build system messages based on inputs and history.
   // Reuse the system prompt from routing pre-fetch when available.
-  const systemPrompt =
+  let systemPrompt =
     prefetchedContext?.systemPrompt ??
     (await chatPrompt(workspace, user, {
       prompt: updatedMessage,
       rawHistory,
     }));
+  if (driveDocumentLookup && contextTexts.length > 0)
+    systemPrompt +=
+      "\n\nFor questions about company documents, contracts, or folders, answer directly from the retrieved excerpts and cite the sources. The application has already searched the Google Drive folders this user is authorized to access. Never claim that Drive is disconnected, unavailable, or needs authorization. Do not ask the user to name a document or folder when relevant excerpts are already present. If the excerpts do not establish a requested fact, say what was and was not found without inventing details.";
   const messages = await LLMConnector.compressMessages(
     {
       systemPrompt,
@@ -337,6 +465,10 @@ async function streamChatWithWorkspace(
       connector: LLMConnector,
     });
   }
+  // Provider duration measures only generation. This elapsed value includes
+  // retrieval, context assembly, and generation, which helps distinguish slow
+  // model calls from the rest of the chat pipeline.
+  metrics.requestDurationMs = Date.now() - requestStartedAt;
 
   if (completeText?.length > 0) {
     const { chat } = await WorkspaceChats.new({

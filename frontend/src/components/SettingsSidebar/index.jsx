@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import paths from "@/utils/paths";
-import useLogo from "@/hooks/useLogo";
+import BrandLockup from "@/components/BrandLockup";
 import {
   House,
   List,
@@ -27,7 +27,6 @@ import useAppVersion from "@/hooks/useAppVersion";
 
 export default function SettingsSidebar() {
   const { t } = useTranslation();
-  const { logo } = useLogo();
   const { user } = useUser();
   const sidebarRef = useRef(null);
   const [showSidebar, setShowSidebar] = useState(false);
@@ -57,11 +56,10 @@ export default function SettingsSidebar() {
             <List className="h-6 w-6" />
           </button>
           <div className="flex items-center justify-center flex-grow">
-            <img
-              src={logo}
-              alt="Logo"
-              className="block mx-auto h-6 w-auto"
-              style={{ maxHeight: "40px", objectFit: "contain" }}
+            <BrandLockup
+              className="text-theme-text-secondary light:text-slate-800"
+              markClassName="h-6 w-6"
+              nameClassName="text-lg"
             />
           </div>
           <div className="w-12"></div>
@@ -142,11 +140,10 @@ export default function SettingsSidebar() {
           to={paths.home()}
           className="flex shrink-0 items-center justify-start mx-[20.5px] my-[18px]"
         >
-          <img
-            src={logo}
-            alt="Logo"
-            className="rounded max-h-[24px]"
-            style={{ objectFit: "contain" }}
+          <BrandLockup
+            className="text-theme-text-secondary light:text-slate-800"
+            markClassName="h-6 w-6"
+            nameClassName="text-base"
           />
         </Link>
         <div
@@ -279,12 +276,17 @@ const SidebarOptions = ({ user = null, t }) => (
             {
               btnText: t("settings.users"),
               href: paths.settings.users(),
-              roles: ["admin", "manager"],
+              roles: ["admin"],
+            },
+            {
+              btnText: "Empresas",
+              href: paths.settings.companies(),
+              roles: ["admin"],
             },
             {
               btnText: t("settings.workspaces"),
               href: paths.settings.workspaces(),
-              roles: ["admin", "manager"],
+              roles: ["admin"],
             },
             {
               hidden: !canViewChatHistory,
@@ -296,7 +298,7 @@ const SidebarOptions = ({ user = null, t }) => (
             {
               btnText: t("settings.invites"),
               href: paths.settings.invites(),
-              roles: ["admin", "manager"],
+              roles: ["admin"],
             },
             {
               btnText: "Default System Prompt",
@@ -385,7 +387,7 @@ const SidebarOptions = ({ user = null, t }) => (
               btnText: t("settings.available-channels.telegram"),
               href: paths.settings.telegram(),
               flex: true,
-              hidden: !!user,
+              roles: ["admin"],
             },
           ]}
         />
@@ -408,10 +410,22 @@ const SidebarOptions = ({ user = null, t }) => (
               roles: ["admin"],
             },
             {
+              btnText: t("settings.agent-review"),
+              href: paths.settings.agentReview(),
+              flex: true,
+              roles: ["admin"],
+            },
+            {
+              btnText: t("settings.agent-quality"),
+              href: paths.settings.agentQuality(),
+              flex: true,
+              roles: ["admin"],
+            },
+            {
               btnText: t("settings.scheduled-jobs"),
               href: paths.settings.scheduledJobs(),
               flex: true,
-              hidden: !!user,
+              roles: ["admin"],
             },
             {
               btnText: t("settings.api-keys"),

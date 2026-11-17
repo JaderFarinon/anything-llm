@@ -19,6 +19,13 @@ export default function DBConnection({
   connections = [],
 }) {
   const { database_id, engine } = connection;
+  const accessScope = connection.accessScope || "global";
+  const scopeLabels = {
+    global: "Todos os usuários",
+    company: `Empresa #${connection.accessScopeId}`,
+    workspace: `Workspace #${connection.accessScopeId}`,
+    user: `Usuário #${connection.accessScopeId}`,
+  };
   const { isOpen, openModal, closeModal } = useModal();
 
   function removeConfirmation() {
@@ -42,15 +49,23 @@ export default function DBConnection({
         <div className="flex flex-col">
           <div className="text-sm font-semibold text-white">{database_id}</div>
           <div className="mt-1 text-xs text-description">{engine}</div>
+          <div className="mt-1 text-xs text-theme-text-secondary">
+            Acesso: {scopeLabels[accessScope] || "Restrito"}
+          </div>
+          <div className="mt-1 max-w-[420px] text-xs text-theme-text-secondary">
+            {connection.description || "Descrição do sistema ainda não informada."}
+          </div>
         </div>
         <div className="flex gap-x-2">
           <button
             type="button"
             data-tooltip-id="edit-sql-connection-tooltip"
-            className="border-none text-theme-text-secondary hover:text-theme-text-primary transition-colors duration-200 p-1 rounded"
+            aria-label={connection.description ? "Editar conexão SQL" : "Adicionar descrição da conexão SQL"}
+            className="flex items-center gap-1 border-none text-theme-text-secondary hover:text-theme-text-primary transition-colors duration-200 p-1 rounded text-xs whitespace-nowrap"
             onClick={openModal}
           >
             <PencilSimple size={18} />
+            {connection.description ? "Editar conexão" : "Adicionar descrição"}
           </button>
           <button
             type="button"

@@ -394,13 +394,25 @@ const System = {
   },
 
   fetchCustomAppName: async function () {
+    const normalizeAppName = (name) =>
+      typeof name === "string" && /nexo|anything\s?llm/i.test(name)
+        ? "AnyHealth"
+        : name || "";
     const cache = window.localStorage.getItem(this.cacheKeys.customAppName);
     const { appName, lastFetched } = cache
       ? safeJsonParse(cache, { appName: "", lastFetched: 0 })
       : { appName: "", lastFetched: 0 };
 
-    if (!!appName && Date.now() - lastFetched < 3_600_000)
-      return { appName: appName, error: null };
+    const normalizedCachedName = normalizeAppName(appName);
+    if (!!normalizedCachedName && Date.now() - lastFetched < 3_600_000) {
+      if (normalizedCachedName !== appName) {
+        window.localStorage.setItem(
+          this.cacheKeys.customAppName,
+          JSON.stringify({ appName: normalizedCachedName, lastFetched: Date.now() })
+        );
+      }
+      return { appName: normalizedCachedName, error: null };
+    }
 
     const { customAppName, error } = await fetch(
       `${API_BASE}/system/custom-app-name`,
@@ -421,11 +433,12 @@ const System = {
       return { appName: "", error: null };
     }
 
+    const normalizedName = normalizeAppName(customAppName);
     window.localStorage.setItem(
       this.cacheKeys.customAppName,
-      JSON.stringify({ appName: customAppName, lastFetched: Date.now() })
+      JSON.stringify({ appName: normalizedName, lastFetched: Date.now() })
     );
-    return { appName: customAppName, error: null };
+    return { appName: normalizedName, error: null };
   },
   /**
    * Fetches the default system prompt from the server.
@@ -647,6 +660,77 @@ const System = {
         return [];
       });
   },
+  agentReviewCandidates: async () => {
+    return await fetch(`${API_BASE}/system/agent-review/candidates`, {
+      method: "GET",
+      headers: baseHeaders(),
+    })
+      .then((res) => res.json())
+      .then((res) => res?.candidates || [])
+      .catch((e) => {
+        console.error(e);
+        return [];
+      });
+  },
+  agentReviewSuggestions: async () => {
+    return await fetch(`${API_BASE}/system/agent-review/suggestions`, {
+      method: "GET",
+      headers: baseHeaders(),
+    })
+      .then((res) => res.json())
+      .then((res) => res?.suggestions || [])
+      .catch((e) => {
+        console.error(e);
+        return [];
+      });
+  },
+  generateAgentSuggestion: async (chatId) => {
+    return await fetch(`${API_BASE}/system/agent-review/suggestions`, {
+      method: "POST",
+      headers: baseHeaders(),
+      body: JSON.stringify({ chatId }),
+    })
+      .then((res) => res.json())
+      .catch((e) => ({ success: false, error: e.message }));
+  },
+  decideAgentSuggestion: async (eventId, decision) => {
+    return await fetch(
+      `${API_BASE}/system/agent-review/suggestions/${eventId}/decision`,
+      {
+        method: "POST",
+        headers: baseHeaders(),
+        body: JSON.stringify({ decision }),
+      }
+    )
+      .then((res) => res.json())
+      .catch((e) => ({ success: false, error: e.message }));
+  },
+  agentQualityInteractions: async (date, offset = 0, limit = 25) => {
+    const params = new URLSearchParams({ date, offset: String(offset), limit: String(limit) });
+    return await fetch(`${API_BASE}/system/agent-quality/interactions?${params}`, {
+      method: "GET",
+      headers: baseHeaders(),
+    })
+      .then((res) => res.json())
+      .catch((e) => ({ interactions: [], total: 0, error: e.message }));
+  },
+  agentQualityReports: async () => {
+    return await fetch(`${API_BASE}/system/agent-quality/reports`, {
+      method: "GET",
+      headers: baseHeaders(),
+    })
+      .then((res) => res.json())
+      .catch((e) => ({ reports: [], error: e.message }));
+  },
+  generateAgentQualityReport: async (date) => {
+    return await fetch(`${API_BASE}/system/agent-quality/reports`, {
+      method: "POST",
+      headers: baseHeaders(),
+      body: JSON.stringify({ date }),
+    })
+      .then((res) => res.json())
+      .catch((e) => ({ success: false, error: e.message }));
+  },
   clearEventLogs: async () => {
     return await fetch(`${API_BASE}/system/event-logs`, {
       method: "DELETE",
@@ -685,6 +769,15 @@ const System = {
         console.error(e);
         return null;
       });
+  },
+  telegramLinkStatus: async () => {
+    return await fetch(API_BASE + "/telegram/link-status", { headers: baseHeaders() }).then((res) => res.json()).catch(() => ({ linked: false }));
+  },
+  createTelegramLink: async () => {
+    return await fetch(API_BASE + "/telegram/link-token", { method: "POST", headers: baseHeaders() }).then((res) => res.json()).catch((e) => ({ error: e.message }));
+  },
+  unlinkTelegram: async () => {
+    return await fetch(API_BASE + "/telegram/link", { method: "DELETE", headers: baseHeaders() }).then((res) => res.json()).catch((e) => ({ success: false, error: e.message }));
   },
   updateUser: async (data) => {
     return await fetch(`${API_BASE}/system/user`, {
@@ -873,6 +966,16 @@ const System = {
         console.error("Failed to validate SQL connection:", e);
         return { success: false, error: e.message };
       });
+  },
+
+  testSQLQuery: async function (database_id, sql, parameters = [], values = {}) {
+    return fetch(`${API_BASE}/system/test-sql-query`, {
+      method: "POST",
+      headers: baseHeaders(),
+      body: JSON.stringify({ database_id, sql, parameters, values }),
+    })
+      .then((res) => res.json())
+      .catch((error) => ({ success: false, error: error.message }));
   },
 
   /**

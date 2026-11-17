@@ -355,7 +355,11 @@ export default function AdminAgents() {
       >
         <form
           onSubmit={handleSubmit}
-          onChange={() => !selectedFlow && setHasChanges(true)}
+          onChange={() => {
+            if (selectedFlow || appIntegrationSkills[selectedSkill]?.configurationOnly)
+              return;
+            setHasChanges(true);
+          }}
           ref={formEl}
           className="flex flex-col w-full p-4 mt-10"
         >
@@ -573,6 +577,7 @@ export default function AdminAgents() {
         onSubmit={handleSubmit}
         onChange={(e) => {
           if (IGNORE_CHANGE_SETTINGS.includes(e.target.name)) return;
+          if (appIntegrationSkills[selectedSkill]?.configurationOnly) return;
           if (!selectedSkill?.imported && !selectedFlow) setHasChanges(true);
         }}
         ref={formEl}
@@ -852,7 +857,11 @@ function SkillList({
                 <DefaultBadge title={skill} />
               ) : (
                 <div className="text-sm text-theme-text-secondary font-medium">
-                  {activeSkills.includes(skill) ? "On" : "Off"}
+                  {settings.configurationOnly
+                    ? "Configure"
+                    : activeSkills.includes(skill)
+                      ? "On"
+                      : "Off"}
                 </div>
               )}
               <CaretRight

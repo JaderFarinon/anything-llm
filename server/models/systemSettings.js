@@ -9,9 +9,28 @@ const { MetaGenerator } = require("../utils/boot/MetaGenerator");
 const { PGVector } = require("../utils/vectorDbProviders/pgvector");
 const { NativeEmbedder } = require("../utils/EmbeddingEngines/native");
 const { getBaseLLMProviderModel } = require("../utils/helpers");
+const { EncryptionManager } = require("../utils/EncryptionManager");
 const {
   ConnectionStringParser,
 } = require("../utils/agents/aibitat/plugins/sql-agent/SQLConnectors/utils");
+
+const SQL_CONNECTION_ENCRYPTED_PREFIX = "enc:";
+
+function decryptSqlConnectionString(connectionString) {
+  if (!connectionString?.startsWith(SQL_CONNECTION_ENCRYPTED_PREFIX))
+    return connectionString;
+  return new EncryptionManager().decrypt(
+    connectionString.slice(SQL_CONNECTION_ENCRYPTED_PREFIX.length)
+  );
+}
+
+function encryptSqlConnectionString(connectionString) {
+  if (!connectionString || connectionString.startsWith(SQL_CONNECTION_ENCRYPTED_PREFIX))
+    return connectionString;
+  const encrypted = new EncryptionManager().encrypt(connectionString);
+  if (!encrypted) throw new Error("Could not encrypt SQL connection details.");
+  return SQL_CONNECTION_ENCRYPTED_PREFIX + encrypted;
+}
 
 function isNullOrNaN(value) {
   if (value === null) return true;
@@ -396,16 +415,38 @@ const SystemSettings = {
       const existingConnections = safeJsonParse(
         (await SystemSettings.get({ label: "agent_sql_connections" }))?.value,
         []
-      );
+      ).map((connection) => ({
+        ...connection,
+        connectionString: decryptSqlConnectionString(connection.connectionString),
+      }));
       try {
-        const updatedConnections = mergeConnections(
+        const updateList = safeJsonParse(updates, []);
+        const mergedConnections = mergeConnections(
           existingConnections,
-          safeJsonParse(updates, [])
+          updateList
         );
+        for (const update of updateList) {
+          if (!["add", "update"].includes(update?.action)) continue;
+          const connection = mergedConnections.find(
+            (item) => item.database_id === slugify(update.database_id)
+          );
+          if (connection) await validateSQLConnectionScope(connection);
+        }
+        const updatedConnections = mergedConnections.map((connection) => ({
+          ...connection,
+          connectionString: encryptSqlConnectionString(connection.connectionString),
+        }));
         return JSON.stringify(updatedConnections);
       } catch {
         console.error(`Failed to merge connections`);
-        return JSON.stringify(existingConnections ?? []);
+        return JSON.stringify(
+          (existingConnections ?? []).map((connection) => ({
+            ...connection,
+            connectionString: encryptSqlConnectionString(
+              connection.connectionString
+            ),
+          }))
+        );
       }
     },
     agent_clarifying_questions_enabled: (update) => {
@@ -750,6 +791,14 @@ const SystemSettings = {
       }
 
       await Promise.all(updatePromises);
+      if (Object.prototype.hasOwnProperty.call(updates, "agent_sql_connections")) {
+        try {
+          const { syncSqlKnowledgeIndex } = require("../utils/agents/aibitat/plugins/sql-agent/knowledge-index");
+          await syncSqlKnowledgeIndex(await this.getSQLConnections());
+        } catch (error) {
+          console.error("Could not sync SQL connection knowledge to vector DB:", error.message);
+        }
+      }
       return { success: true, error: null };
     } catch (error) {
       console.error("FAILED TO UPDATE SYSTEM SETTINGS", error.message);
@@ -1094,13 +1143,22 @@ const SystemSettings = {
     };
   },
 
-  agent_sql_connections: async function () {
+  getSQLConnections: async function () {
     const setting = await SystemSettings.get({
       label: "agent_sql_connections",
     });
     if (!setting) return [];
+    return safeJsonParse(setting.value, [])
+      .map((conn) => ({
+        ...conn,
+        connectionString: decryptSqlConnectionString(conn.connectionString),
+      }))
+      .filter((conn) => !!conn.connectionString);
+  },
 
-    const connections = safeJsonParse(setting.value, []).map((conn) => {
+  agent_sql_connections: async function () {
+    const connections = await this.getSQLConnections();
+    return connections.map((conn) => {
       let scheme = conn.engine;
       if (scheme === "sql-server") scheme = "mssql";
       if (scheme === "postgresql") scheme = "postgres";
@@ -1176,6 +1234,45 @@ const SystemSettings = {
  * @param {Array<Object>} updates - Connection updates from frontend, each with an action property
  * @returns {Array<Object>} - The merged connections array
  */
+function normalizeSQLConnectionScope(
+  scopeValue,
+  scopeIdValue,
+  existingConnection = null
+) {
+  const accessScope =
+    String(scopeValue || existingConnection?.accessScope || "global").trim();
+  if (!["global", "company", "workspace", "user"].includes(accessScope))
+    throw new Error("Invalid SQL connection access scope.");
+  const rawScopeId =
+    scopeIdValue !== undefined
+      ? scopeIdValue
+      : existingConnection?.accessScopeId;
+  const accessScopeId =
+    accessScope === "global" ? null : Number(rawScopeId);
+  if (
+    accessScope !== "global" &&
+    (!Number.isInteger(accessScopeId) || accessScopeId <= 0)
+  )
+    throw new Error("A restricted SQL connection needs a valid scope target.");
+  return { accessScope, accessScopeId };
+}
+
+async function validateSQLConnectionScope(connection) {
+  if (connection.accessScope === "global") return true;
+  const targetModel = {
+    company: "companies",
+    workspace: "workspaces",
+    user: "users",
+  }[connection.accessScope];
+  if (!targetModel) throw new Error("Invalid SQL connection access scope.");
+  const target = await prisma[targetModel].findUnique({
+    where: { id: connection.accessScopeId },
+    select: { id: true },
+  });
+  if (!target) throw new Error("The SQL connection scope target does not exist.");
+  return true;
+}
+
 function mergeConnections(existingConnections = [], updates = []) {
   const connectionsMap = new Map(
     existingConnections.map((conn) => [conn.database_id, conn])
@@ -1189,6 +1286,10 @@ function mergeConnections(existingConnections = [], updates = []) {
       connectionString,
       engine,
       schema,
+      description,
+      accessScope,
+      accessScopeId,
+      queries,
     } = update;
 
     switch (action) {
@@ -1199,6 +1300,7 @@ function mergeConnections(existingConnections = [], updates = []) {
       case "update": {
         if (!connectionString) continue;
         const newId = slugify(database_id);
+        const existingConnection = connectionsMap.get(originalDatabaseId);
 
         // Verify original connection exists
         if (!connectionsMap.has(originalDatabaseId)) {
@@ -1221,8 +1323,15 @@ function mergeConnections(existingConnections = [], updates = []) {
         connectionsMap.set(newId, {
           engine,
           database_id: newId,
+          description: String(description ?? existingConnection?.description ?? "").trim().slice(0, 2000),
+          ...normalizeSQLConnectionScope(
+            accessScope,
+            accessScopeId,
+            existingConnection
+          ),
           connectionString,
           ...(schema && { schema }),
+          queries: normalizeSavedQueries(queries ?? existingConnection?.queries ?? []),
         });
         break;
       }
@@ -1242,8 +1351,26 @@ function mergeConnections(existingConnections = [], updates = []) {
         connectionsMap.set(slugifiedId, {
           engine,
           database_id: slugifiedId,
+          description: String(description ?? "").trim().slice(0, 2000),
+          ...normalizeSQLConnectionScope(accessScope, accessScopeId),
           connectionString,
           ...(schema && { schema }),
+          queries: normalizeSavedQueries(queries ?? []),
+        });
+        break;
+      }
+
+      case "queries": {
+        const existing = connectionsMap.get(database_id);
+        if (!existing) {
+          console.warn(
+            `[mergeConnections] Query update skipped: Connection "${database_id}" not found`
+          );
+          break;
+        }
+        connectionsMap.set(database_id, {
+          ...existing,
+          queries: normalizeSavedQueries(queries ?? []),
         });
         break;
       }
@@ -1256,6 +1383,76 @@ function mergeConnections(existingConnections = [], updates = []) {
   }
 
   return Array.from(connectionsMap.values());
+}
+
+function normalizeSavedQueries(queries = []) {
+  const { validateReadOnlyQuery } = require("../utils/agents/aibitat/plugins/sql-agent/readOnly");
+  const { getQueryParameterNames } = require("../utils/agents/aibitat/plugins/sql-agent/query-template");
+  if (!Array.isArray(queries) || queries.length > 100)
+    throw new Error("A database can have up to 100 saved queries.");
+
+  const ids = new Set();
+  return queries.map((query) => {
+    const id = String(query?.id || "").trim();
+    const title = String(query?.title || "").trim();
+    const description = String(query?.description || "").trim();
+    const sql = String(query?.sql || "").trim();
+    const examples = Array.isArray(query?.examples)
+      ? [...new Set(query.examples.map((value) => String(value).trim()).filter(Boolean))].slice(0, 20)
+      : [];
+    const parameters = Array.isArray(query?.parameters) ? query.parameters : [];
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(id) || ids.has(id))
+      throw new Error("Each saved SQL query needs a unique identifier.");
+    ids.add(id);
+    if (!title || title.length > 120)
+      throw new Error("Query titles must be between 1 and 120 characters.");
+    if (!description || description.length > 2000)
+      throw new Error("Query descriptions must be between 1 and 2000 characters.");
+    if (!sql || sql.length > 20000)
+      throw new Error("SQL templates must be between 1 and 20000 characters.");
+    if (parameters.length > 30)
+      throw new Error("A saved SQL query can have up to 30 parameters.");
+    const validation = validateReadOnlyQuery(sql);
+    if (!validation.valid) throw new Error(validation.reason);
+
+    const names = getQueryParameterNames(sql);
+    const parameterNames = new Set();
+    const normalizedParameters = parameters.map((parameter) => {
+      const name = String(parameter?.name || "").trim();
+      const type = String(parameter?.type || "string");
+      const parameterDescription = String(parameter?.description || "").trim();
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) || parameterNames.has(name))
+        throw new Error("Query parameter names must be unique identifiers.");
+      if (!names.includes(name))
+        throw new Error(`Parameter ${name} is not used in the SQL template.`);
+      if (!parameterDescription || parameterDescription.length > 500)
+        throw new Error(`Add a short description for ${name}.`);
+      if (!["string", "integer", "number", "date", "boolean"].includes(type))
+        throw new Error(`Unsupported parameter type for ${name}.`);
+      parameterNames.add(name);
+      return {
+        name,
+        type,
+        description: parameterDescription,
+        required: parameter?.required !== false,
+        ...(parameter?.defaultValue !== undefined && parameter.defaultValue !== ""
+          ? { defaultValue: parameter.defaultValue }
+          : {}),
+      };
+    });
+    const undefinedNames = names.filter((name) => !parameterNames.has(name));
+    if (undefinedNames.length)
+      throw new Error(`Add parameter details for: ${undefinedNames.join(", ")}.`);
+
+    return {
+      id,
+      title,
+      description,
+      sql,
+      examples,
+      parameters: normalizedParameters,
+    };
+  });
 }
 
 module.exports.SystemSettings = SystemSettings;

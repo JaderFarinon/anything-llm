@@ -70,6 +70,14 @@ const Telegram = {
       });
   },
 
+  getLinkedUsers: async function () {
+    return await fetch(`${API_BASE}/telegram/linked-users`, { headers: baseHeaders() }).then((res) => res.json()).catch(() => ({ users: [] }));
+  },
+
+  unlinkUser: async function (userId) {
+    return await fetch(`${API_BASE}/telegram/unlink-user`, { method: "POST", headers: baseHeaders(), body: JSON.stringify({ userId }) }).then((res) => res.json()).catch((e) => ({ success: false, error: e.message }));
+  },
+
   /**
    * Get pending pairing requests.
    * @returns {Promise<{users: Array}>}

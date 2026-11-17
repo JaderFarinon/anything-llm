@@ -18,6 +18,8 @@ import Modal, {
 import { useTheme } from "@/hooks/useTheme";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import paths from "@/utils/paths";
 import { Tooltip } from "react-tooltip";
 import { safeJsonParse } from "@/utils/request";
 import Toggle from "@/components/lib/Toggle";
@@ -30,6 +32,35 @@ import {
 export default function AccountModal({ user, hideModal }) {
   const { pfp, setPfp } = usePfp();
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [telegramLink, setTelegramLink] = useState(null);
+  const [telegramLinked, setTelegramLinked] = useState(!!user?.telegramChatId);
+
+  useEffect(() => {
+    if (!user?.role) return;
+    System.telegramLinkStatus().then(({ linked }) => setTelegramLinked(!!linked));
+  }, [user?.role]);
+
+  useEffect(() => {
+    if (!telegramLink) return;
+    let active = true;
+    const interval = setInterval(async () => {
+      if (Date.now() >= telegramLink.expiresAt) {
+        setTelegramLink(null);
+        showToast("O código expirou. Gere um novo para vincular o Telegram.", "error");
+        return;
+      }
+      const { linked } = await System.telegramLinkStatus();
+      if (!active || !linked) return;
+      setTelegramLinked(true);
+      setTelegramLink(null);
+      showToast("Telegram vinculado à sua conta.", "success");
+    }, 2500);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [telegramLink]);
 
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
@@ -159,6 +190,116 @@ export default function AccountModal({ user, hideModal }) {
             defaultValue={user.bio}
             rows={4}
           />
+          {user?.role && (
+            <section className="flex flex-col gap-2 rounded-lg border border-white/10 light:border-slate-300 p-4">
+              <div className="font-semibold text-zinc-100 light:text-slate-900">
+                Telegram
+              </div>
+              <p className="text-sm text-zinc-400 light:text-slate-600">
+                {telegramLinked
+                  ? "Conta vinculada. O bot usa as permissões e o histórico desta conta."
+                  : "Vincule sua conta do Telegram para conversar com a IA pelo bot."}
+              </p>
+              {telegramLink && (
+                <div className="flex flex-col gap-2 rounded bg-zinc-800/70 p-3 light:bg-slate-100">
+                  <span className="text-xs text-zinc-400 light:text-slate-600">
+                    Copie este código e envie como mensagem privada ao bot. Ele
+                    expira em 10 minutos e só pode ser usado uma vez.
+                  </span>
+                  <code className="select-all break-all rounded bg-black/20 p-2 text-sm text-sky-300 light:bg-white light:text-sky-700">
+                    {telegramLink.token}
+                  </code>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="px-3 py-2 rounded bg-zinc-700 text-white text-sm"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(telegramLink.token);
+                          showToast("Código copiado.", "success");
+                        } catch {
+                          showToast("Selecione e copie o código acima.", "error");
+                        }
+                      }}
+                    >
+                      Copiar código
+                    </button>
+                    <a
+                      className="inline-flex items-center rounded bg-sky-600 px-3 py-2 text-sm text-white"
+                      href={telegramLink.botUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Abrir bot no Telegram
+                    </a>
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-2">
+                {!telegramLinked && (
+                  <button
+                    type="button"
+                    className="px-3 py-2 rounded bg-sky-600 text-white text-sm"
+                    onClick={async () => {
+                      const result = await System.createTelegramLink();
+                      if (result.token && result.botUrl)
+                        setTelegramLink({
+                          token: result.token,
+                          botUrl: result.botUrl,
+                          expiresAt:
+                            Date.now() + (result.expiresInSeconds || 600) * 1000,
+                        });
+                      else
+                        showToast(
+                          result.error || "Não foi possível gerar o link.",
+                          "error"
+                        );
+                    }}
+                  >
+                    Gerar link de vínculo
+                  </button>
+                )}
+                {telegramLinked && (
+                  <button
+                    type="button"
+                    className="px-3 py-2 rounded bg-zinc-700 text-white text-sm"
+                    onClick={async () => {
+                      const result = await System.unlinkTelegram();
+                      if (result.success) {
+                        setTelegramLinked(false);
+                        setTelegramLink(null);
+                        showToast("Telegram desvinculado.", "success");
+                      } else
+                        showToast(
+                          result.error || "Não foi possível desvincular.",
+                          "error"
+                        );
+                    }}
+                  >
+                    Desvincular Telegram
+                  </button>
+                )}
+              </div>
+            </section>
+          )}
+          <section className="rounded-lg border border-white/10 p-4">
+            <h3 className="text-sm font-semibold text-zinc-100 light:text-slate-800">
+              Google Drive
+            </h3>
+            <p className="mt-1 text-xs text-zinc-400 light:text-slate-600">
+              Conecte seu Drive pessoal e envie pastas para aprovação do admin.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                hideModal();
+                navigate(paths.settings.googleDrive());
+              }}
+              className="mt-3 px-3 py-2 rounded bg-zinc-700 text-white text-sm"
+            >
+              Gerenciar Google Drive
+            </button>
+          </section>
           <div className="flex gap-x-16">
             <div className="flex flex-col gap-y-6">
               <ThemePreference />

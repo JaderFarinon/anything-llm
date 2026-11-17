@@ -616,6 +616,19 @@ const Workspace = {
       });
   },
 
+  sqlHelp: async function (slug = null) {
+    if (!slug) return { connections: [], driveFolders: [], loadError: false };
+    return await fetch(`${API_BASE}/workspace/${slug}/sql-help`, {
+      headers: baseHeaders(),
+    })
+      .then((res) =>
+        res.ok
+          ? res.json()
+          : { connections: [], driveFolders: [], loadError: true }
+      )
+      .catch(() => ({ connections: [], driveFolders: [], loadError: true }));
+  },
+
   threads: WorkspaceThread,
 };
 

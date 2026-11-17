@@ -16,9 +16,17 @@ export default function CustomSiteSettings() {
       "meta_page_title",
       "meta_page_favicon",
     ]).then(({ settings }) => {
+      const savedTitle = settings?.meta_page_title;
+      const savedFaviconUrl = settings?.meta_page_favicon;
       setSettings({
-        title: settings?.meta_page_title,
-        faviconUrl: settings?.meta_page_favicon,
+        title:
+          typeof savedTitle === "string" && /nexo|anything\s?llm/i.test(savedTitle)
+            ? "AnyHealth | IA interna da empresa"
+            : savedTitle,
+        faviconUrl:
+          typeof savedFaviconUrl === "string" && /nexo|anything\s?llm/i.test(savedFaviconUrl)
+            ? null
+            : savedFaviconUrl,
       });
     });
   }, []);
@@ -63,7 +71,7 @@ export default function CustomSiteSettings() {
             name="meta_page_title"
             type="text"
             className="border-none bg-theme-settings-input-bg mt-2 text-white placeholder:text-theme-settings-input-placeholder text-sm rounded-lg focus:outline-primary-button active:outline-primary-button outline-none block w-fit py-2 px-4"
-            placeholder="AnythingLLM | Your personal LLM trained on anything"
+            placeholder="AnyHealth | IA interna da empresa"
             autoComplete="off"
             onChange={(e) => {
               setSettings((prev) => {
@@ -72,7 +80,7 @@ export default function CustomSiteSettings() {
             }}
             value={
               settings.title ??
-              "AnythingLLM | Your personal LLM trained on anything"
+              "AnyHealth | IA interna da empresa"
             }
           />
         </div>
@@ -87,8 +95,8 @@ export default function CustomSiteSettings() {
         </p>
         <div className="flex items-center gap-x-2">
           <img
-            src={settings.faviconUrl ?? "/favicon.png"}
-            onError={(e) => (e.target.src = "/favicon.png")}
+            src={settings.faviconUrl ?? "/anyhealth-mark.svg"}
+            onError={(e) => (e.target.src = "/anyhealth-mark.svg")}
             className="h-10 w-10 rounded-lg mt-2"
             alt="Site favicon"
           />

@@ -2,6 +2,9 @@
 // https://github.com/yagop/node-telegram-bot-api/blob/master/doc/usage.md#sending-files
 process.env.NTBA_FIX_350 = 1;
 const TelegramBot = require("node-telegram-bot-api");
+const crypto = require("crypto");
+const prisma = require("../../utils/prisma");
+const { User } = require("../../models/user");
 const {
   ExternalCommunicationConnector,
 } = require("../../models/externalCommunicationConnector");
@@ -120,6 +123,14 @@ class TelegramBotService {
         });
       }
     }
+    for (const [chatId, state] of Object.entries(config.linked_user_states || {})) {
+      if (state?.workspaceSlug) {
+        this.#chatState.set(Number(chatId), {
+          workspaceSlug: state.workspaceSlug,
+          threadSlug: state.threadSlug || null,
+        });
+      }
+    }
 
     this.#setupHandlers();
     await this.#registerCommands();
@@ -132,7 +143,12 @@ class TelegramBotService {
       );
       const ctx = this.#createContext();
       for (const [chatId, msg] of lastMessages) {
-        if (!isVerified(this.#config.approved_users, chatId)) continue;
+        const multiUser = await this.checkMultiUserMode();
+        if (multiUser) {
+          const linkedUser = await User.get({ telegramChatId: String(chatId) });
+          if (!linkedUser || linkedUser.suspended) continue;
+          ctx.getUser = async () => linkedUser;
+        } else if (!isVerified(this.#config.approved_users, chatId)) continue;
         this.#processPendingMessage(ctx, msg);
       }
     }
@@ -377,8 +393,17 @@ class TelegramBotService {
       return u;
     });
     this.#config.approved_users = approved;
+    const linkedStates = {
+      ...(this.#config.linked_user_states || {}),
+      [String(chatId)]: {
+        workspaceSlug: state.workspaceSlug,
+        threadSlug: state.threadSlug || null,
+      },
+    };
+    this.#config.linked_user_states = linkedStates;
     await ExternalCommunicationConnector.updateConfig("telegram", {
       approved_users: approved,
+      linked_user_states: linkedStates,
     });
   }
 
@@ -391,6 +416,7 @@ class TelegramBotService {
       bot: this.#bot,
       config: this.#config,
       getState: (chatId) => this.#getState(chatId),
+      getUser: async (chatId) => User.get({ telegramChatId: String(chatId) }),
       setState: (chatId, updates) => this.#setState(chatId, updates),
       log: (text, ...args) => this.#log(text, ...args),
     };
@@ -409,25 +435,6 @@ class TelegramBotService {
   }
 
   /**
-   * Assert that the bot is running in single-user mode.
-   * If the instance is running in multi-user mode, it will stop the bot and delete the connector.
-   * - Returns true if the bot is running in single-user mode.
-   * - Returns false if the bot is running in multi-user mode.
-   * @returns {Promise<boolean>}
-   */
-  async #assertSingleUserMode() {
-    const isMultiUserMode = await this.checkMultiUserMode();
-    if (!isMultiUserMode) return true;
-
-    this.#log(
-      "Invalid state: Multi-user mode detected. Cleaning up and deleting connector."
-    );
-    await this.stop();
-    await ExternalCommunicationConnector.delete("telegram");
-    return false;
-  }
-
-  /**
    * Reset the polling retry state and clear the timer if it exists.
    */
   #resetPollingRetry() {
@@ -436,28 +443,95 @@ class TelegramBotService {
     this.#pollingRetry.timer = null;
   }
 
+  async #linkTelegramAccount(msg, token) {
+    if (msg.chat.type !== "private") {
+      await this.#bot.sendMessage(
+        msg.chat.id,
+        "Por segurança, envie o código em uma conversa privada com este bot."
+      );
+      return true;
+    }
+
+    try {
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      const linkedUser = await prisma.$transaction(async (tx) => {
+        const record = await tx.telegram_link_tokens.findUnique({
+          where: { tokenHash },
+        });
+        if (!record || record.expiresAt <= new Date()) return null;
+
+        // Claim the one-time code before linking, so a concurrent attempt cannot
+        // associate the same code with more than one Telegram chat.
+        const claimed = await tx.telegram_link_tokens.deleteMany({
+          where: { id: record.id, tokenHash, expiresAt: { gt: new Date() } },
+        });
+        if (claimed.count !== 1) return null;
+
+        return tx.users.update({
+          where: { id: record.userId },
+          data: { telegramChatId: String(msg.chat.id) },
+        });
+      });
+
+      if (!linkedUser) {
+        await this.#bot.sendMessage(
+          msg.chat.id,
+          "Código inválido ou expirado. Gere um novo código na sua conta AnyHealth."
+        );
+        return true;
+      }
+
+      await this.#bot.sendMessage(
+        msg.chat.id,
+        "Telegram vinculado à conta " +
+          linkedUser.username +
+          ". Agora você pode conversar nos workspaces liberados para sua conta."
+      );
+    } catch (error) {
+      this.#log("Telegram account link failed:", error.message);
+      await this.#bot.sendMessage(
+        msg.chat.id,
+        "Não foi possível vincular esta conta. Verifique se ela já está vinculada a outro usuário."
+      );
+    }
+    return true;
+  }
+
   #setupHandlers() {
     const ctx = this.#createContext();
     const guard = async (msg, handler) => {
       if (!this.#config) return;
-      this.#resetPollingRetry(); // Reset the polling on successful message receipt
-
+      this.#resetPollingRetry();
+      const multiUser = await this.checkMultiUserMode();
+      if (multiUser) {
+        const user = await User.get({ telegramChatId: String(msg.chat.id) });
+        if (!user || user.suspended) {
+          await this.#bot.sendMessage(msg.chat.id, "Conta não vinculada. Acesse sua conta AnyHealth e gere um código em Perfil > Telegram.");
+          return;
+        }
+        const userContext = { ...ctx, getUser: async () => user };
+        handler(userContext);
+        return;
+      }
       if (!isVerified(this.#config.approved_users, msg.chat.id)) {
         sendPairingRequest(this.#bot, msg, this.#pendingPairings);
         return;
       }
-
-      const isSingleUserMode = await this.#assertSingleUserMode();
-      if (!isSingleUserMode) return;
       handler();
     };
+
+    this.#bot.onText(commandPattern("start"), async (msg) => {
+      const token = String(msg.text || "").trim().split(/\s+/)[1];
+      if (!token) return;
+      await this.#linkTelegramAccount(msg, token);
+    });
 
     // Register all commands (history is registered separately below)
     for (const command of BOT_COMMANDS) {
       if (command.skipAutoSetup) continue;
       const handler = command.initHandler();
       this.#bot.onText(commandPattern(command.command), (msg) =>
-        guard(msg, () => handler(ctx, msg.chat.id, msg.text))
+        guard(msg, (userContext) => handler(userContext, msg.chat.id, msg.text))
       );
     }
 
@@ -480,7 +554,20 @@ class TelegramBotService {
 
     this.#bot.on("message", (msg) => {
       if (msg.text?.startsWith("/")) return;
-      guard(msg, () => this.#handleMessage(ctx, msg));
+      void (async () => {
+        const token = String(msg.text || "").trim();
+        if (/^[A-Za-z0-9_-]{40,60}$/.test(token)) {
+          const multiUser = await this.checkMultiUserMode();
+          const linkedUser = multiUser
+            ? await User.get({ telegramChatId: String(msg.chat.id) })
+            : null;
+          if (multiUser && !linkedUser) {
+            await this.#linkTelegramAccount(msg, token);
+            return;
+          }
+        }
+        guard(msg, (userContext) => this.#handleMessage(userContext, msg));
+      })();
     });
 
     this.#bot.on("polling_error", (error) => {
@@ -507,10 +594,18 @@ class TelegramBotService {
       await bgService.bree.run(jobId);
       const worker = bgService.bree.workers.get(jobId);
 
+      const multiUserMode = await this.checkMultiUserMode();
+      const telegramUser = multiUserMode ? await User.get({ telegramChatId: String(chatId) }) : null;
+      if (multiUserMode && (!telegramUser || telegramUser.suspended)) {
+        await ctx.bot.sendMessage(chatId, "Sua conta não está mais vinculada. Gere um novo vínculo na sua conta AnyHealth.");
+        return;
+      }
       if (worker && typeof worker.send === "function") {
         worker.send({
           botToken: this.#config.bot_token,
           chatId,
+          multiUserMode,
+          userId: telegramUser?.id || null,
           workspaceSlug: state.workspaceSlug,
           threadSlug: state.threadSlug,
           ...payload,
@@ -812,7 +907,7 @@ class TelegramBotService {
   /**
    * Boot the bot from database config on server startup.
    * Decrypts the stored bot token before starting.
-   * If the instance is running in multi-user mode, it will skip boot and delete the connector if it exists.
+   * The bot supports both single-user and multi-user mode.
    * @returns {Promise<void>}
    */
   static async bootIfActive() {
@@ -821,11 +916,6 @@ class TelegramBotService {
       const connector = await ExternalCommunicationConnector.get("telegram");
       if (!connector || !connector.active || !connector.config?.bot_token)
         return;
-
-      // If there is a valid config, but the instance is running in multi-user mode - skip boot
-      // but also cleanup the config and approved users
-      const isSingleUserMode = await service.#assertSingleUserMode();
-      if (!isSingleUserMode) return;
 
       const config = { ...connector.config };
       config.bot_token = decryptToken(config.bot_token);

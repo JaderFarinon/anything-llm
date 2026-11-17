@@ -8,18 +8,37 @@ import {
   AUTH_TIMESTAMP,
 } from "../../../utils/constants";
 import useLogo from "../../../hooks/useLogo";
+import BrandLockup from "@/components/BrandLockup";
 
 export default function PasswordModal({ mode = "single" }) {
   const { loginLogo, isCustomLogo } = useLogo();
   return (
     <div className="fixed inset-0 bg-zinc-950 light:bg-slate-50 flex flex-col items-center justify-center overflow-hidden">
-      <img
-        src={loginLogo}
-        alt="Logo"
-        className={`max-h-[80px] ${isCustomLogo ? "rounded-lg" : ""}`}
-        style={{ objectFit: "contain" }}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 light:hidden"
+        style={{
+          background:
+            "radial-gradient(ellipse 58% 42% at 50% 38%, rgba(25, 198, 162, 0.12), transparent 76%)",
+        }}
       />
-      {mode === "single" ? <SingleUserAuth /> : <MultiUserAuth />}
+      <BrandLockup
+        className="relative z-10 text-white light:text-slate-950 mb-3"
+        markClassName="h-12 w-12"
+        nameClassName="text-4xl"
+      />
+      {isCustomLogo && (
+        <img
+          src={loginLogo}
+          alt="Custom logo"
+          className="relative z-10 max-h-[56px] rounded-lg mb-2"
+          style={{ objectFit: "contain" }}
+        />
+      )}
+      <div className="relative z-10">
+        {mode === "single" ? <SingleUserAuth /> : <MultiUserAuth />}
+      </div>
+      <span className="absolute bottom-5 text-xs text-zinc-500">Company AI workspace</span>
     </div>
   );
 }
