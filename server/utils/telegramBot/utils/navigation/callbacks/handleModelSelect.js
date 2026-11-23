@@ -14,7 +14,9 @@ const { isTelegramAdmin } = require("../../access");
  */
 async function handleModelSelect({ ctx, chatId, query, messageId, data } = {}) {
   if (!(await isTelegramAdmin(ctx, chatId))) {
-    await ctx.bot.answerCallbackQuery(query.id, { text: "Somente administradores podem alterar o modelo." });
+    await ctx.bot.answerCallbackQuery(query.id, {
+      text: "Somente administradores podem alterar o modelo.",
+    });
     return;
   }
   const parts = data.slice(4).split(":");

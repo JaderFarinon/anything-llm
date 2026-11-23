@@ -16,40 +16,58 @@ const adminOnly = [validatedRequest, flexUserRoleValid([ROLES.admin])];
 function googleDriveEndpoints(app) {
   if (!app) return;
 
-  app.get("/admin/google-drive/config", adminOnly, async (_request, response) => {
-    try {
-      response.status(200).json({ config: await GoogleDriveConnection.safeConfig() });
-    } catch (error) {
-      console.error("Google Drive config read failed:", error.message);
-      response.status(500).json({ error: "Não foi possível carregar a configuração." });
+  app.get(
+    "/admin/google-drive/config",
+    adminOnly,
+    async (_request, response) => {
+      try {
+        response
+          .status(200)
+          .json({ config: await GoogleDriveConnection.safeConfig() });
+      } catch (error) {
+        console.error("Google Drive config read failed:", error.message);
+        response
+          .status(500)
+          .json({ error: "Não foi possível carregar a configuração." });
+      }
     }
-  });
+  );
 
-  app.put("/admin/google-drive/config", adminOnly, async (request, response) => {
-    try {
-      await GoogleDriveConnection.saveConfig(reqBody(request));
-      response.status(200).json({
-        success: true,
-        config: await GoogleDriveConnection.safeConfig(),
-      });
-    } catch (error) {
-      response.status(400).json({ error: error.message });
+  app.put(
+    "/admin/google-drive/config",
+    adminOnly,
+    async (request, response) => {
+      try {
+        await GoogleDriveConnection.saveConfig(reqBody(request));
+        response.status(200).json({
+          success: true,
+          config: await GoogleDriveConnection.safeConfig(),
+        });
+      } catch (error) {
+        response.status(400).json({ error: error.message });
+      }
     }
-  });
+  );
 
-  app.get("/google-drive/connections", authenticated, async (request, response) => {
-    try {
-      const user = await userFromSession(request, response);
-      const connections = await GoogleDriveConnection.userConnections(
-        user.id,
-        user.role === ROLES.admin
-      );
-      response.status(200).json({ connections });
-    } catch (error) {
-      console.error("Google Drive connections read failed:", error.message);
-      response.status(500).json({ error: "Não foi possível carregar as conexões." });
+  app.get(
+    "/google-drive/connections",
+    authenticated,
+    async (request, response) => {
+      try {
+        const user = await userFromSession(request, response);
+        const connections = await GoogleDriveConnection.userConnections(
+          user.id,
+          user.role === ROLES.admin
+        );
+        response.status(200).json({ connections });
+      } catch (error) {
+        console.error("Google Drive connections read failed:", error.message);
+        response
+          .status(500)
+          .json({ error: "Não foi possível carregar as conexões." });
+      }
     }
-  });
+  );
 
   app.post("/google-drive/webhook", async (request, response) => {
     const channelId = request.get("x-goog-channel-id");
@@ -69,7 +87,8 @@ function googleDriveEndpoints(app) {
       if (
         expectedHash.length !== receivedHash.length ||
         !crypto.timingSafeEqual(expectedHash, receivedHash) ||
-        (connection.channelResourceId && connection.channelResourceId !== resourceId)
+        (connection.channelResourceId &&
+          connection.channelResourceId !== resourceId)
       )
         return response.sendStatus(404).end();
 
@@ -85,30 +104,38 @@ function googleDriveEndpoints(app) {
     }
   });
 
-  app.post("/google-drive/oauth/start", authenticated, async (request, response) => {
-    try {
-      const user = await userFromSession(request, response);
-      const { scope = "personal", companyId = null } = reqBody(request);
-      if (scope === "company") {
-        if (user.role !== ROLES.admin)
-          return response.status(403).json({ error: "Somente admins conectam o Drive da empresa." });
-        const company = await prisma.companies.findUnique({
-          where: { id: Number(companyId) },
-          select: { id: true },
+  app.post(
+    "/google-drive/oauth/start",
+    authenticated,
+    async (request, response) => {
+      try {
+        const user = await userFromSession(request, response);
+        const { scope = "personal", companyId = null } = reqBody(request);
+        if (scope === "company") {
+          if (user.role !== ROLES.admin)
+            return response
+              .status(403)
+              .json({ error: "Somente admins conectam o Drive da empresa." });
+          const company = await prisma.companies.findUnique({
+            where: { id: Number(companyId) },
+            select: { id: true },
+          });
+          if (!company)
+            return response
+              .status(404)
+              .json({ error: "Empresa não encontrada." });
+        }
+        const authorizationUrl = await GoogleDriveConnection.createOAuthUrl({
+          userId: user.id,
+          scope,
+          companyId,
         });
-        if (!company)
-          return response.status(404).json({ error: "Empresa não encontrada." });
+        response.status(200).json({ authorizationUrl });
+      } catch (error) {
+        response.status(400).json({ error: error.message });
       }
-      const authorizationUrl = await GoogleDriveConnection.createOAuthUrl({
-        userId: user.id,
-        scope,
-        companyId,
-      });
-      response.status(200).json({ authorizationUrl });
-    } catch (error) {
-      response.status(400).json({ error: error.message });
     }
-  });
+  );
 
   // Google redirects here with a short-lived, one-use state created by the authenticated start route.
   app.get("/google-drive/oauth/callback", async (request, response) => {
@@ -120,10 +147,12 @@ function googleDriveEndpoints(app) {
     try {
       if (request.query.error)
         throw new Error("A autorização do Google Drive foi cancelada.");
-      const { connection, baseUrl } = await GoogleDriveConnection.completeOAuth({
-        state: request.query.state,
-        code: request.query.code,
-      });
+      const { connection, baseUrl } = await GoogleDriveConnection.completeOAuth(
+        {
+          state: request.query.state,
+          code: request.query.code,
+        }
+      );
       const target = new URL("/settings/google-drive", baseUrl);
       target.searchParams.set("connected", connection.scope);
       response.redirect(302, target.toString());
@@ -146,7 +175,9 @@ function googleDriveEndpoints(app) {
           include: { company: { select: { id: true, name: true } } },
         });
         if (!connection)
-          return response.status(404).json({ error: "Conexão não encontrada." });
+          return response
+            .status(404)
+            .json({ error: "Conexão não encontrada." });
         const isAdmin = user.role === ROLES.admin;
         const isOwner = connection.userId === user.id;
         const isCompanyMember = connection.companyId
@@ -158,7 +189,9 @@ function googleDriveEndpoints(app) {
         if (!isAdmin && !isOwner && !isCompanyMember)
           return response.sendStatus(403).end();
         if (connection.scope === "company" && !isAdmin)
-          return response.status(403).json({ error: "A seleção das pastas da empresa é restrita ao admin." });
+          return response.status(403).json({
+            error: "A seleção das pastas da empresa é restrita ao admin.",
+          });
 
         const accessToken = await GoogleDriveConnection.accessToken(connection);
         const folders = await DriveApi.listFolders(accessToken, {
@@ -185,16 +218,24 @@ function googleDriveEndpoints(app) {
           typeof name !== "string" ||
           !name.trim()
         )
-          return response.status(400).json({ error: "Selecione uma pasta válida." });
+          return response
+            .status(400)
+            .json({ error: "Selecione uma pasta válida." });
         const connection = await prisma.google_drive_connections.findUnique({
           where: { id: Number(request.params.id) },
         });
         if (!connection)
-          return response.status(404).json({ error: "Conexão não encontrada." });
+          return response
+            .status(404)
+            .json({ error: "Conexão não encontrada." });
         const isAdmin = user.role === ROLES.admin;
         if (connection.scope === "company" && !isAdmin)
           return response.sendStatus(403).end();
-        if (connection.scope === "personal" && connection.userId !== user.id && !isAdmin)
+        if (
+          connection.scope === "personal" &&
+          connection.userId !== user.id &&
+          !isAdmin
+        )
           return response.sendStatus(403).end();
 
         const existingFolder = await prisma.google_drive_folders.findUnique({
@@ -207,7 +248,9 @@ function googleDriveEndpoints(app) {
           select: { id: true, status: true, workspaceId: true },
         });
         if (existingFolder?.status === "blocked")
-          return response.status(409).json({ error: "Esta pasta foi bloqueada pelo admin." });
+          return response
+            .status(409)
+            .json({ error: "Esta pasta foi bloqueada pelo admin." });
         if (existingFolder?.status === "rejected") {
           const indexedContent = await prisma.google_drive_files.count({
             where: {
@@ -217,28 +260,34 @@ function googleDriveEndpoints(app) {
           });
           if (indexedContent)
             return response.status(409).json({
-              error: "A remoção desta pasta ainda está limpando o conteúdo indexado. Tente novamente em instantes.",
+              error:
+                "A remoção desta pasta ainda está limpando o conteúdo indexado. Tente novamente em instantes.",
             });
         }
 
         let targetWorkspaceId = workspaceId ? Number(workspaceId) : null;
         if (connection.scope === "company") {
           if (!targetWorkspaceId)
-            return response.status(400).json({ error: "Escolha o workspace da empresa para esta pasta." });
+            return response.status(400).json({
+              error: "Escolha o workspace da empresa para esta pasta.",
+            });
           const workspace = await prisma.workspaces.findUnique({
             where: { id: targetWorkspaceId },
             select: { id: true, companyId: true },
           });
           if (!workspace || workspace.companyId !== connection.companyId)
-            return response.status(400).json({ error: "O workspace precisa pertencer a esta empresa." });
+            return response
+              .status(400)
+              .json({ error: "O workspace precisa pertencer a esta empresa." });
         } else {
-          const existingPersonalWorkspace = await prisma.google_drive_folders.findFirst({
-            where: {
-              connectionId: connection.id,
-              workspaceId: { not: null },
-            },
-            select: { workspaceId: true },
-          });
+          const existingPersonalWorkspace =
+            await prisma.google_drive_folders.findFirst({
+              where: {
+                connectionId: connection.id,
+                workspaceId: { not: null },
+              },
+              select: { workspaceId: true },
+            });
           targetWorkspaceId = existingPersonalWorkspace?.workspaceId || null;
           if (!targetWorkspaceId) {
             const { workspace, message } = await Workspace.new(
@@ -246,7 +295,9 @@ function googleDriveEndpoints(app) {
               user.id
             );
             if (!workspace)
-              return response.status(500).json({ error: message || "Não foi possível criar o workspace pessoal." });
+              return response.status(500).json({
+                error: message || "Não foi possível criar o workspace pessoal.",
+              });
             targetWorkspaceId = workspace.id;
             await prisma.workspaces.update({
               where: { id: targetWorkspaceId },
@@ -297,137 +348,186 @@ function googleDriveEndpoints(app) {
     }
   );
 
-  app.delete("/google-drive/folders/:id", authenticated, async (request, response) => {
-    try {
-      const user = await userFromSession(request, response);
-      const folder = await prisma.google_drive_folders.findUnique({
-        where: { id: Number(request.params.id) },
-        include: { connection: { select: { id: true, scope: true, userId: true } } },
-      });
-      if (!folder) return response.status(404).json({ error: "Pasta não encontrada." });
-      const isAdmin = user.role === ROLES.admin;
-      const isOwner = folder.connection.userId === user.id;
-      if (!isAdmin && (folder.connection.scope === "company" || !isOwner))
-        return response.sendStatus(403).end();
-      await prisma.google_drive_folders.update({
-        where: { id: folder.id },
-        data: { status: "rejected", lastUpdatedAt: new Date() },
-      });
-      await prisma.google_drive_connections.update({
-        where: { id: folder.connectionId },
-        data: { syncRequested: true, lastUpdatedAt: new Date() },
-      });
-      response.status(200).json({ success: true });
-    } catch (error) {
-      console.error("Failed to remove Google Drive folder:", error.message);
-      response.status(400).json({ error: "Não foi possível remover a pasta." });
+  app.delete(
+    "/google-drive/folders/:id",
+    authenticated,
+    async (request, response) => {
+      try {
+        const user = await userFromSession(request, response);
+        const folder = await prisma.google_drive_folders.findUnique({
+          where: { id: Number(request.params.id) },
+          include: {
+            connection: { select: { id: true, scope: true, userId: true } },
+          },
+        });
+        if (!folder)
+          return response.status(404).json({ error: "Pasta não encontrada." });
+        const isAdmin = user.role === ROLES.admin;
+        const isOwner = folder.connection.userId === user.id;
+        if (!isAdmin && (folder.connection.scope === "company" || !isOwner))
+          return response.sendStatus(403).end();
+        await prisma.google_drive_folders.update({
+          where: { id: folder.id },
+          data: { status: "rejected", lastUpdatedAt: new Date() },
+        });
+        await prisma.google_drive_connections.update({
+          where: { id: folder.connectionId },
+          data: { syncRequested: true, lastUpdatedAt: new Date() },
+        });
+        response.status(200).json({ success: true });
+      } catch (error) {
+        console.error("Failed to remove Google Drive folder:", error.message);
+        response
+          .status(400)
+          .json({ error: "Não foi possível remover a pasta." });
+      }
     }
-  });
+  );
 
-  app.get("/admin/google-drive/folders/pending", adminOnly, async (_request, response) => {
-    try {
-      const folders = await prisma.google_drive_folders.findMany({
-        where: { scope: "personal", status: "pending" },
-        include: {
-          connection: {
-            select: {
-              googleEmail: true,
-              user: { select: { id: true, username: true } },
+  app.get(
+    "/admin/google-drive/folders/pending",
+    adminOnly,
+    async (_request, response) => {
+      try {
+        const folders = await prisma.google_drive_folders.findMany({
+          where: { scope: "personal", status: "pending" },
+          include: {
+            connection: {
+              select: {
+                googleEmail: true,
+                user: { select: { id: true, username: true } },
+              },
             },
           },
-        },
-        orderBy: { createdAt: "asc" },
-      });
-      response.status(200).json({ folders });
-    } catch (error) {
-      console.error("Failed to list pending Google Drive folders:", error.message);
-      response.status(500).json({ error: "Não foi possível carregar a moderação." });
+          orderBy: { createdAt: "asc" },
+        });
+        response.status(200).json({ folders });
+      } catch (error) {
+        console.error(
+          "Failed to list pending Google Drive folders:",
+          error.message
+        );
+        response
+          .status(500)
+          .json({ error: "Não foi possível carregar a moderação." });
+      }
     }
-  });
+  );
 
-  app.get("/admin/google-drive/folders", adminOnly, async (_request, response) => {
-    try {
-      const folders = await prisma.google_drive_folders.findMany({
-        where: { status: { in: ["approved", "pending"] } },
-        include: {
-          connection: {
-            select: {
-              scope: true,
-              googleEmail: true,
-              user: { select: { id: true, username: true } },
-              company: { select: { id: true, name: true } },
+  app.get(
+    "/admin/google-drive/folders",
+    adminOnly,
+    async (_request, response) => {
+      try {
+        const folders = await prisma.google_drive_folders.findMany({
+          where: { status: { in: ["approved", "pending"] } },
+          include: {
+            connection: {
+              select: {
+                scope: true,
+                googleEmail: true,
+                user: { select: { id: true, username: true } },
+                company: { select: { id: true, name: true } },
+              },
             },
+            _count: { select: { files: true } },
           },
-          _count: { select: { files: true } },
-        },
-        orderBy: { createdAt: "asc" },
-      });
-      response.status(200).json({ folders });
-    } catch (error) {
-      console.error("Failed to list Google Drive folders:", error.message);
-      response.status(500).json({ error: "Não foi possível carregar as pastas do Drive." });
+          orderBy: { createdAt: "asc" },
+        });
+        response.status(200).json({ folders });
+      } catch (error) {
+        console.error("Failed to list Google Drive folders:", error.message);
+        response
+          .status(500)
+          .json({ error: "Não foi possível carregar as pastas do Drive." });
+      }
     }
-  });
+  );
 
-  app.get("/admin/google-drive/folders/:id/files", adminOnly, async (request, response) => {
-    try {
-      const folderId = Number(request.params.id);
-      const folder = await prisma.google_drive_folders.findUnique({
-        where: { id: folderId },
-        select: { id: true },
-      });
-      if (!folder) return response.status(404).json({ error: "Pasta não encontrada." });
-      const files = await prisma.google_drive_files.findMany({
-        where: { folderId },
-        select: {
-          id: true,
-          folderId: true,
-          name: true,
-          mimeType: true,
-          modifiedTime: true,
-          status: true,
-          blocked: true,
-          lastError: true,
-          lastSyncedAt: true,
-        },
-        orderBy: { name: "asc" },
-      });
-      response.status(200).json({ files });
-    } catch (error) {
-      console.error("Failed to list Google Drive files:", error.message);
-      response.status(500).json({ error: "Não foi possível carregar os documentos." });
+  app.get(
+    "/admin/google-drive/folders/:id/files",
+    adminOnly,
+    async (request, response) => {
+      try {
+        const folderId = Number(request.params.id);
+        const folder = await prisma.google_drive_folders.findUnique({
+          where: { id: folderId },
+          select: { id: true },
+        });
+        if (!folder)
+          return response.status(404).json({ error: "Pasta não encontrada." });
+        const files = await prisma.google_drive_files.findMany({
+          where: { folderId },
+          select: {
+            id: true,
+            folderId: true,
+            name: true,
+            mimeType: true,
+            modifiedTime: true,
+            status: true,
+            blocked: true,
+            lastError: true,
+            lastSyncedAt: true,
+          },
+          orderBy: { name: "asc" },
+        });
+        response.status(200).json({ files });
+      } catch (error) {
+        console.error("Failed to list Google Drive files:", error.message);
+        response
+          .status(500)
+          .json({ error: "Não foi possível carregar os documentos." });
+      }
     }
-  });
+  );
 
-  app.post("/admin/google-drive/files/:id/block", adminOnly, async (request, response) => {
-    try {
-      const { blocked } = reqBody(request);
-      if (typeof blocked !== "boolean")
-        return response.status(400).json({ error: "Informe se o documento deve ser bloqueado." });
-      const file = await prisma.google_drive_files.findUnique({
-        where: { id: Number(request.params.id) },
-        select: { id: true, folderId: true, folder: { select: { connectionId: true } } },
-      });
-      if (!file) return response.status(404).json({ error: "Documento não encontrado." });
-      await prisma.google_drive_files.update({
-        where: { id: file.id },
-        data: {
-          blocked,
-          status: blocked ? "blocked" : "pending",
-          lastError: null,
-          ...(blocked ? {} : { lastSyncedAt: null }),
-        },
-      });
-      await prisma.google_drive_connections.update({
-        where: { id: file.folder.connectionId },
-        data: { syncRequested: true, lastUpdatedAt: new Date() },
-      });
-      response.status(200).json({ success: true, queued: true });
-    } catch (error) {
-      console.error("Failed to update Google Drive file moderation:", error.message);
-      response.status(400).json({ error: "Não foi possível atualizar o bloqueio do documento." });
+  app.post(
+    "/admin/google-drive/files/:id/block",
+    adminOnly,
+    async (request, response) => {
+      try {
+        const { blocked } = reqBody(request);
+        if (typeof blocked !== "boolean")
+          return response
+            .status(400)
+            .json({ error: "Informe se o documento deve ser bloqueado." });
+        const file = await prisma.google_drive_files.findUnique({
+          where: { id: Number(request.params.id) },
+          select: {
+            id: true,
+            folderId: true,
+            folder: { select: { connectionId: true } },
+          },
+        });
+        if (!file)
+          return response
+            .status(404)
+            .json({ error: "Documento não encontrado." });
+        await prisma.google_drive_files.update({
+          where: { id: file.id },
+          data: {
+            blocked,
+            status: blocked ? "blocked" : "pending",
+            lastError: null,
+            ...(blocked ? {} : { lastSyncedAt: null }),
+          },
+        });
+        await prisma.google_drive_connections.update({
+          where: { id: file.folder.connectionId },
+          data: { syncRequested: true, lastUpdatedAt: new Date() },
+        });
+        response.status(200).json({ success: true, queued: true });
+      } catch (error) {
+        console.error(
+          "Failed to update Google Drive file moderation:",
+          error.message
+        );
+        response.status(400).json({
+          error: "Não foi possível atualizar o bloqueio do documento.",
+        });
+      }
     }
-  });
+  );
 
   app.post(
     "/admin/google-drive/folders/:id/moderate",
@@ -436,7 +536,9 @@ function googleDriveEndpoints(app) {
       try {
         const { status } = reqBody(request);
         if (!["approved", "rejected", "blocked"].includes(status))
-          return response.status(400).json({ error: "Status de moderação inválido." });
+          return response
+            .status(400)
+            .json({ error: "Status de moderação inválido." });
         const currentFolder = await prisma.google_drive_folders.findUnique({
           where: { id: Number(request.params.id) },
           select: { id: true, connectionId: true },
@@ -456,8 +558,10 @@ function googleDriveEndpoints(app) {
           data: { syncRequested: true, lastUpdatedAt: new Date() },
         });
         response.status(200).json({ folder });
-      } catch (error) {
-        response.status(400).json({ error: "Não foi possível atualizar a pasta." });
+      } catch {
+        response
+          .status(400)
+          .json({ error: "Não foi possível atualizar a pasta." });
       }
     }
   );

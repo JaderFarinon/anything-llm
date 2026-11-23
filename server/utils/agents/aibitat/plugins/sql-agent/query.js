@@ -19,7 +19,8 @@ module.exports.SqlAgentQuery = {
             "Use this after sql-list-saved-queries has searched every connection the user may access. Run only the approved query_id from that catalog; map the user's dates, names and filters to its documented parameters, and chain queries when a saved query returns an identifier needed by another. Preserve the meaning of returned columns exactly: never relabel an internal exam/procedure code as TUSS unless the query explicitly identifies that field as TUSS. If the saved query does not return the requested kind of code or fact, say so instead of substituting a different code. Answer from returned rows and cite the saved query title; when the user requests a chart, pass those rows to create-chart. Only read-only SQL is accepted and results are capped at 200 rows.",
           examples: [
             {
-              prompt: "What approved SQL queries can answer a question about billing?",
+              prompt:
+                "What approved SQL queries can answer a question about billing?",
               call: JSON.stringify({
                 database_id: "billing",
               }),
@@ -124,11 +125,9 @@ module.exports.SqlAgentQuery = {
               );
             };
             try {
-              const databaseConfig = (await listSQLConnections(
-                sqlConnectionScopeContext(this.super)
-              )).find(
-                (db) => db.database_id === database_id
-              );
+              const databaseConfig = (
+                await listSQLConnections(sqlConnectionScopeContext(this.super))
+              ).find((db) => db.database_id === database_id);
               if (!databaseConfig) {
                 this.super.handlerProps.log(
                   `sql-query failed to find config!`,
@@ -143,8 +142,11 @@ module.exports.SqlAgentQuery = {
                 ? databaseConfig.queries
                 : [];
               if (query_id) {
-                const savedQuery = savedQueries.find((query) => query.id === query_id);
-                if (!savedQuery) return `No approved query with id ${query_id} was found.`;
+                const savedQuery = savedQueries.find(
+                  (query) => query.id === query_id
+                );
+                if (!savedQuery)
+                  return `No approved query with id ${query_id} was found.`;
                 selectedQueryTitle = savedQuery.title;
                 const prepared = prepareSavedQuery({
                   engine: databaseConfig.engine,
@@ -159,7 +161,8 @@ module.exports.SqlAgentQuery = {
                   return `This database has approved saved queries. Use sql-list-saved-queries and call sql-query with one of the returned query_id values.`;
                 const validation = validateReadOnlyQuery(sql_query);
                 if (!validation.valid) return validation.reason;
-                if (!sql_query.trim()) return "Provide a query_id for an approved query.";
+                if (!sql_query.trim())
+                  return "Provide a query_id for an approved query.";
               }
 
               this.super.introspect(
@@ -167,13 +170,18 @@ module.exports.SqlAgentQuery = {
               );
               const db = getDBClient(databaseConfig.engine, databaseConfig);
 
-              this.super.introspect(`Running an approved SQL query on ${database_id}.`);
+              this.super.introspect(
+                `Running an approved SQL query on ${database_id}.`
+              );
               const result = await db.runQuery(queryToRun, boundParameters);
               if (result.error) {
                 await logQuery({
                   success: false,
                   queryId: query_id || null,
-                  queryTitle: typeof selectedQueryTitle === "string" ? selectedQueryTitle : null,
+                  queryTitle:
+                    typeof selectedQueryTitle === "string"
+                      ? selectedQueryTitle
+                      : null,
                   errorCode: "query_execution_failed",
                 });
                 this.super.handlerProps.log(
@@ -189,7 +197,10 @@ module.exports.SqlAgentQuery = {
               await logQuery({
                 success: true,
                 queryId: query_id || null,
-                queryTitle: typeof selectedQueryTitle === "string" ? selectedQueryTitle : null,
+                queryTitle:
+                  typeof selectedQueryTitle === "string"
+                    ? selectedQueryTitle
+                    : null,
                 rowCount: rows.length,
                 truncated: result.truncated === true || rows.length > maxRows,
               });

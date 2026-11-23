@@ -73,7 +73,8 @@ class MetaGenerator {
         tag: "meta",
         props: {
           name: "description",
-          content: "IA interna da empresa com acesso a documentos e dados corporativos.",
+          content:
+            "IA interna da empresa com acesso a documentos e dados corporativos.",
         },
       },
 
@@ -81,7 +82,10 @@ class MetaGenerator {
       { tag: "meta", props: { property: "og:type", content: "website" } },
       {
         tag: "meta",
-        props: { property: "og:url", content: "https://anyhealth.qyvia.com.br" },
+        props: {
+          property: "og:url",
+          content: "https://anyhealth.qyvia.com.br",
+        },
       },
       {
         tag: "meta",
@@ -94,7 +98,8 @@ class MetaGenerator {
         tag: "meta",
         props: {
           property: "og:description",
-          content: "IA interna da empresa com acesso a documentos e dados corporativos.",
+          content:
+            "IA interna da empresa com acesso a documentos e dados corporativos.",
         },
       },
       {
@@ -112,7 +117,10 @@ class MetaGenerator {
       },
       {
         tag: "meta",
-        props: { property: "twitter:url", content: "https://anyhealth.qyvia.com.br" },
+        props: {
+          property: "twitter:url",
+          content: "https://anyhealth.qyvia.com.br",
+        },
       },
       {
         tag: "meta",
@@ -125,7 +133,8 @@ class MetaGenerator {
         tag: "meta",
         props: {
           property: "twitter:description",
-          content: "IA interna da empresa com acesso a documentos e dados corporativos.",
+          content:
+            "IA interna da empresa com acesso a documentos e dados corporativos.",
         },
       },
       {
@@ -227,7 +236,8 @@ class MetaGenerator {
       null
     );
     const faviconURL =
-      typeof savedFaviconUrl === "string" && /nexo|anything\s?llm/i.test(savedFaviconUrl)
+      typeof savedFaviconUrl === "string" &&
+      /nexo|anything\s?llm/i.test(savedFaviconUrl)
         ? null
         : savedFaviconUrl;
 
@@ -249,9 +259,7 @@ class MetaGenerator {
           return {
             tag: "title",
             props: null,
-            content:
-              customTitle ??
-              "AnyHealth | IA interna da empresa",
+            content: customTitle ?? "AnyHealth | IA interna da empresa",
           };
         }
         // Override meta title
@@ -260,9 +268,7 @@ class MetaGenerator {
             tag: "meta",
             props: {
               name: "title",
-              content:
-                customTitle ??
-                "AnyHealth | IA interna da empresa",
+              content: customTitle ?? "AnyHealth | IA interna da empresa",
             },
           };
         }
@@ -272,9 +278,7 @@ class MetaGenerator {
             tag: "meta",
             props: {
               property: "og:title",
-              content:
-                customTitle ??
-                "AnyHealth | IA interna da empresa",
+              content: customTitle ?? "AnyHealth | IA interna da empresa",
             },
           };
         }
@@ -284,9 +288,7 @@ class MetaGenerator {
             tag: "meta",
             props: {
               property: "twitter:title",
-              content:
-                customTitle ??
-                "AnyHealth | IA interna da empresa",
+              content: customTitle ?? "AnyHealth | IA interna da empresa",
             },
           };
         }
@@ -360,10 +362,7 @@ class MetaGenerator {
       );
 
       let iconUrl = "/favicon.png";
-      if (
-        savedFaviconURL &&
-        !/nexo|anything\s?llm/i.test(savedFaviconURL)
-      ) {
+      if (savedFaviconURL && !/nexo|anything\s?llm/i.test(savedFaviconURL)) {
         try {
           new URL(savedFaviconURL);
           iconUrl = savedFaviconURL;

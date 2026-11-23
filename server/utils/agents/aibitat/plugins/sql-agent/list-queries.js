@@ -22,11 +22,15 @@ module.exports.SqlAgentListQueries = {
           examples: [
             {
               prompt: "What approved billing queries can I use?",
-              call: JSON.stringify({ question: "What approved billing queries can I use?" }),
+              call: JSON.stringify({
+                question: "What approved billing queries can I use?",
+              }),
             },
             {
               prompt: "qual valor faturado no Clinic em maio de 2026?",
-              call: JSON.stringify({ question: "qual valor faturado no Clinic em maio de 2026?" }),
+              call: JSON.stringify({
+                question: "qual valor faturado no Clinic em maio de 2026?",
+              }),
             },
           ],
           parameters: {
@@ -35,11 +39,13 @@ module.exports.SqlAgentListQueries = {
             properties: {
               database_id: {
                 type: "string",
-                description: "The database identifier shown in the SQL connection settings.",
+                description:
+                  "The database identifier shown in the SQL connection settings.",
               },
               question: {
                 type: "string",
-                description: "The user's complete natural-language question about the SQL data.",
+                description:
+                  "The user's complete natural-language question about the SQL data.",
               },
             },
             required: ["question"],
@@ -58,19 +64,29 @@ module.exports.SqlAgentListQueries = {
               const queries = Array.isArray(connection.queries)
                 ? connection.queries
                 : [];
-              return queries.map(({ id, title, description, examples = [], parameters = [] }) => ({
-                database_id: connection.database_id,
-                id,
-                title,
-                description,
-                examples: Array.isArray(examples) ? examples : [],
-                parameters: parameters.map(({ name, type, description, required }) => ({
-                  name,
-                  type,
+              return queries.map(
+                ({
+                  id,
+                  title,
                   description,
-                  required,
-                })),
-              }));
+                  examples = [],
+                  parameters = [],
+                }) => ({
+                  database_id: connection.database_id,
+                  id,
+                  title,
+                  description,
+                  examples: Array.isArray(examples) ? examples : [],
+                  parameters: parameters.map(
+                    ({ name, type, description, required }) => ({
+                      name,
+                      type,
+                      description,
+                      required,
+                    })
+                  ),
+                })
+              );
             });
             let relevantContext = [];
             if (question) {
@@ -84,10 +100,11 @@ module.exports.SqlAgentListQueries = {
               const workspace = this.super.handlerProps?.invocation?.workspace;
               if (workspace) {
                 try {
-                  const { connector: LLMConnector } = await resolveProviderConnector({
-                    workspace,
-                    prompt: question,
-                  });
+                  const { connector: LLMConnector } =
+                    await resolveProviderConnector({
+                      workspace,
+                      prompt: question,
+                    });
                   relevantContext = await searchSqlKnowledgeIndex(
                     connections,
                     question,
@@ -103,11 +120,14 @@ module.exports.SqlAgentListQueries = {
             if (!catalog.length)
               return `No approved saved queries are configured${database_id ? ` for ${database_id}` : ""}. Ask an administrator to add one.`;
             return JSON.stringify({
-              connections: connections.map(({ database_id, engine, description }) => ({
-                database_id,
-                engine,
-                description: description || "Descrição da origem ainda não cadastrada.",
-              })),
+              connections: connections.map(
+                ({ database_id, engine, description }) => ({
+                  database_id,
+                  engine,
+                  description:
+                    description || "Descrição da origem ainda não cadastrada.",
+                })
+              ),
               relevant_context: relevantContext,
               queries: catalog,
             });

@@ -1,7 +1,10 @@
 const { Workspace } = require("../../../../../models/workspace");
 const { WorkspaceThread } = require("../../../../../models/workspaceThread");
 const { WorkspaceChats } = require("../../../../../models/workspaceChats");
-const { canAccessTelegramWorkspace, telegramSessionId } = require("../../access");
+const {
+  canAccessTelegramWorkspace,
+  telegramSessionId,
+} = require("../../access");
 
 /**
  * /reset - Clears LLM chat history context.
@@ -11,10 +14,15 @@ const { canAccessTelegramWorkspace, telegramSessionId } = require("../../access"
 async function handleReset(ctx, chatId) {
   const state = ctx.getState(chatId);
   const workspace = await Workspace.get({ slug: state.workspaceSlug });
-  if (!workspace || !(await canAccessTelegramWorkspace(ctx, chatId, workspace))) return;
+  if (!workspace || !(await canAccessTelegramWorkspace(ctx, chatId, workspace)))
+    return;
 
   const thread = state.threadSlug
-    ? await WorkspaceThread.get({ slug: state.threadSlug, workspace_id: workspace.id, user_id: (await ctx.getUser?.(chatId))?.id || null })
+    ? await WorkspaceThread.get({
+        slug: state.threadSlug,
+        workspace_id: workspace.id,
+        user_id: (await ctx.getUser?.(chatId))?.id || null,
+      })
     : null;
 
   const user = await ctx.getUser?.(chatId);

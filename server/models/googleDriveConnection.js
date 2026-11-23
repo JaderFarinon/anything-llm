@@ -58,7 +58,9 @@ const GoogleDriveConnection = {
     const normalizedClientId = String(clientId || "").trim();
     const normalizedSecret = String(clientSecret || "").trim();
     if (!normalizedClientId.endsWith(".apps.googleusercontent.com"))
-      throw new Error("O Client ID não parece ser de um cliente OAuth do Google.");
+      throw new Error(
+        "O Client ID não parece ser de um cliente OAuth do Google."
+      );
     const origin = cleanBaseUrl(baseUrl);
     const current = await prisma.google_drive_oauth_config.findUnique({
       where: { id: 1 },
@@ -66,7 +68,8 @@ const GoogleDriveConnection = {
     let encryptedSecret = current?.clientSecretEncrypted || "";
     if (normalizedSecret) {
       encryptedSecret = encryption.encrypt(normalizedSecret);
-      if (!encryptedSecret) throw new Error("Não foi possível proteger o Client Secret.");
+      if (!encryptedSecret)
+        throw new Error("Não foi possível proteger o Client Secret.");
     }
     if (!encryptedSecret) throw new Error("Informe o Client Secret do Google.");
 
@@ -92,7 +95,9 @@ const GoogleDriveConnection = {
       throw new Error("Escopo de conexão inválido.");
     const config = await this.getConfig();
     if (!config?.clientId || !config?.clientSecret)
-      throw new Error("O administrador ainda não configurou o acesso ao Google Drive.");
+      throw new Error(
+        "O administrador ainda não configurou o acesso ao Google Drive."
+      );
     await prisma.google_drive_oauth_states.deleteMany({
       where: { expiresAt: { lt: new Date() } },
     });
@@ -122,7 +127,8 @@ const GoogleDriveConnection = {
     if (!oauthState || oauthState.expiresAt < new Date())
       throw new Error("O link expirou. Inicie a conexão novamente.");
     const config = await this.getConfig();
-    if (!config) throw new Error("A integração do Google Drive não está configurada.");
+    if (!config)
+      throw new Error("A integração do Google Drive não está configurada.");
     const tokens = await DriveApi.exchangeAuthorizationCode({
       clientId: config.clientId,
       clientSecret: config.clientSecret,
@@ -204,17 +210,20 @@ const GoogleDriveConnection = {
       company: connection.company,
       lastSyncAt: connection.lastSyncAt,
       lastError: connection.lastError,
-      folders: isAdmin || connection.userId === Number(userId)
-        ? connection.folders
-        : connection.folders.filter(({ status }) => status === "approved"),
+      folders:
+        isAdmin || connection.userId === Number(userId)
+          ? connection.folders
+          : connection.folders.filter(({ status }) => status === "approved"),
     }));
   },
 
   async accessToken(connection) {
     const config = await this.getConfig();
-    if (!config) throw new Error("A integração do Google Drive não está configurada.");
+    if (!config)
+      throw new Error("A integração do Google Drive não está configurada.");
     const refreshToken = encryption.decrypt(connection.refreshTokenEncrypted);
-    if (!refreshToken) throw new Error("Não foi possível ler o token do Google Drive.");
+    if (!refreshToken)
+      throw new Error("Não foi possível ler o token do Google Drive.");
     const token = await DriveApi.refreshAccessToken({
       clientId: config.clientId,
       clientSecret: config.clientSecret,

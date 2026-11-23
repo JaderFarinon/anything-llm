@@ -16,11 +16,16 @@ async function showWorkspaceMenu(ctx, chatId, page = 0, messageId = null) {
   const user = await ctx.getUser?.(chatId);
   if ((await SystemSettings.isMultiUserMode()) && user?.role !== "admin") {
     const memberships = await WorkspaceUser.where({ user_id: user?.id || -1 });
-    const allowedIds = new Set(memberships.map((membership) => membership.workspace_id));
+    const allowedIds = new Set(
+      memberships.map((membership) => membership.workspace_id)
+    );
     workspaces = workspaces.filter((workspace) => allowedIds.has(workspace.id));
   }
   if (!workspaces.length) {
-    await ctx.bot.sendMessage(chatId, "No workspaces are assigned to your account. Contact an administrator.");
+    await ctx.bot.sendMessage(
+      chatId,
+      "No workspaces are assigned to your account. Contact an administrator."
+    );
     return;
   }
 

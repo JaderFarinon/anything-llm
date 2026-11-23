@@ -16,7 +16,10 @@ const MODELS_PER_PAGE = 8;
  */
 async function showModelMenu(ctx, chatId, page = 0, messageId = null) {
   if (!(await isTelegramAdmin(ctx, chatId))) {
-    await ctx.bot.sendMessage(chatId, "Somente administradores podem alterar o modelo do workspace.");
+    await ctx.bot.sendMessage(
+      chatId,
+      "Somente administradores podem alterar o modelo do workspace."
+    );
     return;
   }
   const pageNum = typeof page === "number" && !isNaN(page) ? page : 0;

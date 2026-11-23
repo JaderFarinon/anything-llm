@@ -10,7 +10,10 @@ async function handleStart(ctx, chatId) {
   const state = ctx.getState(chatId);
   const workspace = await Workspace.get({ slug: state.workspaceSlug });
   if (!(await canAccessTelegramWorkspace(ctx, chatId, workspace))) {
-    await ctx.bot.sendMessage(chatId, "Use /switch para selecionar um workspace liberado para sua conta.");
+    await ctx.bot.sendMessage(
+      chatId,
+      "Use /switch para selecionar um workspace liberado para sua conta."
+    );
     return;
   }
   const name = workspace?.name || state.workspaceSlug;

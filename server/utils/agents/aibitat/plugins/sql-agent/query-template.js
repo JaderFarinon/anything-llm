@@ -29,14 +29,23 @@ function coerceParameterValue(definition, value) {
     }
     case "date": {
       const parsed = String(value).trim();
-      if (!/^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/.test(parsed) || Number.isNaN(Date.parse(parsed))) {
-        throw new Error(`${definition.name} must be a valid ISO date or datetime.`);
+      if (
+        !/^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/.test(
+          parsed
+        ) ||
+        Number.isNaN(Date.parse(parsed))
+      ) {
+        throw new Error(
+          `${definition.name} must be a valid ISO date or datetime.`
+        );
       }
       return parsed;
     }
     case "boolean": {
-      if (value === true || value === "true" || value === 1 || value === "1") return true;
-      if (value === false || value === "false" || value === 0 || value === "0") return false;
+      if (value === true || value === "true" || value === 1 || value === "1")
+        return true;
+      if (value === false || value === "false" || value === 0 || value === "0")
+        return false;
       throw new Error(`${definition.name} must be true or false.`);
     }
     case "string":
@@ -61,21 +70,29 @@ function prepareSavedQuery({ engine, sql, parameters = [], values = {} }) {
   const definitions = new Map();
   for (const definition of parameters) {
     if (!definition?.name || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(definition.name))
-      throw new Error("Query parameters must use letters, numbers, and underscores.");
+      throw new Error(
+        "Query parameters must use letters, numbers, and underscores."
+      );
     if (definitions.has(definition.name))
       throw new Error(`Duplicate parameter definition: ${definition.name}.`);
     definitions.set(definition.name, definition);
   }
 
-  const unknownDefinitions = [...definitions.keys()].filter((name) => !names.includes(name));
+  const unknownDefinitions = [...definitions.keys()].filter(
+    (name) => !names.includes(name)
+  );
   if (unknownDefinitions.length) {
-    throw new Error(`Unused parameter definition: ${unknownDefinitions.join(", ")}.`);
+    throw new Error(
+      `Unused parameter definition: ${unknownDefinitions.join(", ")}.`
+    );
   }
   const missingDefinitions = names.filter((name) => !definitions.has(name));
   if (missingDefinitions.length) {
     throw new Error(`Add a definition for: ${missingDefinitions.join(", ")}.`);
   }
-  const unknownValues = Object.keys(values || {}).filter((name) => !names.includes(name));
+  const unknownValues = Object.keys(values || {}).filter(
+    (name) => !names.includes(name)
+  );
   if (unknownValues.length) {
     throw new Error(`Unknown query parameter: ${unknownValues.join(", ")}.`);
   }
@@ -96,7 +113,11 @@ function prepareSavedQuery({ engine, sql, parameters = [], values = {} }) {
     throw new Error(`Unsupported SQL engine: ${engine}.`);
   });
 
-  return { query: preparedSql, params: boundValues, parameterNames: orderedNames };
+  return {
+    query: preparedSql,
+    params: boundValues,
+    parameterNames: orderedNames,
+  };
 }
 
 module.exports = { getQueryParameterNames, prepareSavedQuery };

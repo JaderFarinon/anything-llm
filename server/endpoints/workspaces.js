@@ -118,11 +118,7 @@ function workspaceEndpoints(app) {
 
   app.post(
     "/workspace/:slug/upload",
-    [
-      validatedRequest,
-      flexUserRoleValid([ROLES.admin]),
-      handleFileUpload,
-    ],
+    [validatedRequest, flexUserRoleValid([ROLES.admin]), handleFileUpload],
     async function (request, response) {
       try {
         const Collector = new CollectorApi();
@@ -653,11 +649,7 @@ function workspaceEndpoints(app) {
 
   app.post(
     "/workspace/:slug/update-pin",
-    [
-      validatedRequest,
-      flexUserRoleValid([ROLES.admin]),
-      validWorkspaceSlug,
-    ],
+    [validatedRequest, flexUserRoleValid([ROLES.admin]), validWorkspaceSlug],
     async (request, response) => {
       try {
         const { docPath, pinStatus = false } = reqBody(request);
@@ -830,11 +822,7 @@ function workspaceEndpoints(app) {
   /** Handles the uploading and embedding in one-call by uploading via drag-and-drop in chat container. */
   app.post(
     "/workspace/:slug/upload-and-embed",
-    [
-      validatedRequest,
-      flexUserRoleValid([ROLES.admin]),
-      handleFileUpload,
-    ],
+    [validatedRequest, flexUserRoleValid([ROLES.admin]), handleFileUpload],
     async function (request, response) {
       try {
         const { slug = null } = request.params;
@@ -908,11 +896,7 @@ function workspaceEndpoints(app) {
 
   app.delete(
     "/workspace/:slug/remove-and-unembed",
-    [
-      validatedRequest,
-      flexUserRoleValid([ROLES.admin]),
-      handleFileUpload,
-    ],
+    [validatedRequest, flexUserRoleValid([ROLES.admin]), handleFileUpload],
     async function (request, response) {
       try {
         const { slug = null } = request.params;
@@ -937,11 +921,7 @@ function workspaceEndpoints(app) {
 
   app.get(
     "/workspace/:slug/prompt-history",
-    [
-      validatedRequest,
-      flexUserRoleValid([ROLES.admin]),
-      validWorkspaceSlug,
-    ],
+    [validatedRequest, flexUserRoleValid([ROLES.admin]), validWorkspaceSlug],
     async (_, response) => {
       try {
         response.status(200).json({
@@ -958,11 +938,7 @@ function workspaceEndpoints(app) {
 
   app.delete(
     "/workspace/:slug/prompt-history",
-    [
-      validatedRequest,
-      flexUserRoleValid([ROLES.admin]),
-      validWorkspaceSlug,
-    ],
+    [validatedRequest, flexUserRoleValid([ROLES.admin]), validWorkspaceSlug],
     async (_, response) => {
       try {
         response.status(200).json({
@@ -979,11 +955,7 @@ function workspaceEndpoints(app) {
 
   app.delete(
     "/workspace/:slug/prompt-history/:id",
-    [
-      validatedRequest,
-      flexUserRoleValid([ROLES.admin]),
-      validWorkspaceSlug,
-    ],
+    [validatedRequest, flexUserRoleValid([ROLES.admin]), validWorkspaceSlug],
     async (request, response) => {
       try {
         const { id } = request.params;
@@ -1025,11 +997,7 @@ function workspaceEndpoints(app) {
   // SSE endpoint for embedding progress
   app.get(
     "/workspace/:slug/embed-progress",
-    [
-      validatedRequest,
-      flexUserRoleValid([ROLES.admin]),
-      validWorkspaceSlug,
-    ],
+    [validatedRequest, flexUserRoleValid([ROLES.admin]), validWorkspaceSlug],
     async (request, response) => {
       try {
         const workspace = response.locals.workspace;
@@ -1056,11 +1024,7 @@ function workspaceEndpoints(app) {
 
   app.delete(
     "/workspace/:slug/embed-queue",
-    [
-      validatedRequest,
-      flexUserRoleValid([ROLES.admin]),
-      validWorkspaceSlug,
-    ],
+    [validatedRequest, flexUserRoleValid([ROLES.admin]), validWorkspaceSlug],
     async (request, response) => {
       try {
         const workspace = response.locals.workspace;
@@ -1104,13 +1068,17 @@ function workspaceEndpoints(app) {
     [validatedRequest, flexUserRoleValid([ROLES.all]), validWorkspaceSlug],
     async (request, response) => {
       try {
-        const { listSQLConnections } = require("../utils/agents/aibitat/plugins/sql-agent/SQLConnectors");
+        const {
+          listSQLConnections,
+        } = require("../utils/agents/aibitat/plugins/sql-agent/SQLConnectors");
         const user = await userFromSession(request, response);
         const connections = await listSQLConnections({
           userId: user?.id,
           workspaceId: response.locals.workspace.id,
         });
-        const { listConnectedFolders } = require("../utils/chats/googleDriveContext");
+        const {
+          listConnectedFolders,
+        } = require("../utils/chats/googleDriveContext");
         const driveFolders = (await listConnectedFolders(user)).filter(
           (folder) =>
             folder.status === "approved" &&
@@ -1118,26 +1086,45 @@ function workspaceEndpoints(app) {
         );
         response.status(200).json({
           driveFolders: driveFolders.map(({ id, name }) => ({ id, name })),
-          connections: connections.map(({ database_id, engine, description, queries = [] }) => ({
-            database_id,
-            engine,
-            description: description || "Descrição da origem ainda não cadastrada.",
-            queries: queries.map(({ id, title, description: queryDescription, examples = [], parameters = [] }) => ({
-              id,
-              title,
-              description: queryDescription,
-              examples: Array.isArray(examples) ? examples : [],
-              parameters: parameters.map(({ name, description: parameterDescription, required }) => ({
-                name,
-                description: parameterDescription,
-                required: required !== false,
-              })),
-            })),
-          })),
+          connections: connections.map(
+            ({ database_id, engine, description, queries = [] }) => ({
+              database_id,
+              engine,
+              description:
+                description || "Descrição da origem ainda não cadastrada.",
+              queries: queries.map(
+                ({
+                  id,
+                  title,
+                  description: queryDescription,
+                  examples = [],
+                  parameters = [],
+                }) => ({
+                  id,
+                  title,
+                  description: queryDescription,
+                  examples: Array.isArray(examples) ? examples : [],
+                  parameters: parameters.map(
+                    ({
+                      name,
+                      description: parameterDescription,
+                      required,
+                    }) => ({
+                      name,
+                      description: parameterDescription,
+                      required: required !== false,
+                    })
+                  ),
+                })
+              ),
+            })
+          ),
         });
       } catch (error) {
         console.error("Could not load SQL chat help:", error.message);
-        response.status(500).json({ connections: [], error: "Could not load SQL help." });
+        response
+          .status(500)
+          .json({ connections: [], error: "Could not load SQL help." });
       }
     }
   );

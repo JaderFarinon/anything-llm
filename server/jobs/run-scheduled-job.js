@@ -24,25 +24,53 @@ async function sendTelegramReport(job, reportText, logger) {
   const recipientIds = safeJsonParse(job.telegramRecipientIds, []);
   if (!Array.isArray(recipientIds) || recipientIds.length === 0) return;
   try {
-    const { ExternalCommunicationConnector } = require("../models/externalCommunicationConnector");
+    const {
+      ExternalCommunicationConnector,
+    } = require("../models/externalCommunicationConnector");
     const { User } = require("../models/user");
     const { decryptToken } = require("../utils/telegramBot/utils");
     const TelegramBot = require("node-telegram-bot-api");
     const connector = await ExternalCommunicationConnector.get("telegram");
-    const token = connector?.active ? decryptToken(connector.config?.bot_token) : null;
-    if (!token) { logger("Telegram delivery skipped: bot is not configured."); return; }
+    const token = connector?.active
+      ? decryptToken(connector.config?.bot_token)
+      : null;
+    if (!token) {
+      logger("Telegram delivery skipped: bot is not configured.");
+      return;
+    }
     const bot = new TelegramBot(token, { polling: false });
     const users = await User.where({ id: { in: recipientIds.map(Number) } });
     for (const user of users) {
-      if (!user.telegramChatId) { logger("Telegram report recipient " + user.id + " is no longer linked."); continue; }
+      if (!user.telegramChatId) {
+        logger(
+          "Telegram report recipient " + user.id + " is no longer linked."
+        );
+        continue;
+      }
       try {
-        const text = "📊 " + job.name + "\n\n" + (reportText || "Relatório concluído sem texto.");
+        const text =
+          "📊 " +
+          job.name +
+          "\n\n" +
+          (reportText || "Relatório concluído sem texto.");
         for (let offset = 0; offset < text.length; offset += 4000) {
-          await bot.sendMessage(Number(user.telegramChatId), text.slice(offset, offset + 4000));
+          await bot.sendMessage(
+            Number(user.telegramChatId),
+            text.slice(offset, offset + 4000)
+          );
         }
-      } catch (error) { logger("Telegram report delivery failed for user " + user.id + ": " + error.message); }
+      } catch (error) {
+        logger(
+          "Telegram report delivery failed for user " +
+            user.id +
+            ": " +
+            error.message
+        );
+      }
     }
-  } catch (error) { logger("Telegram report delivery error: " + error.message); }
+  } catch (error) {
+    logger("Telegram report delivery error: " + error.message);
+  }
 }
 
 process.on("message", async (payload) => {

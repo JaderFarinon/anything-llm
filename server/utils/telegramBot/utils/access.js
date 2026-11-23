@@ -7,7 +7,10 @@ async function canAccessTelegramWorkspace(ctx, chatId, workspace) {
   const user = await ctx.getUser?.(chatId);
   if (!user || user.suspended) return false;
   if (user.role === "admin") return true;
-  return !!(await WorkspaceUser.get({ user_id: user.id, workspace_id: workspace.id }));
+  return !!(await WorkspaceUser.get({
+    user_id: user.id,
+    workspace_id: workspace.id,
+  }));
 }
 
 async function isTelegramAdmin(ctx, chatId) {
@@ -19,4 +22,8 @@ function telegramSessionId(user) {
   return user?.id ? "telegram:" + user.id : null;
 }
 
-module.exports = { canAccessTelegramWorkspace, isTelegramAdmin, telegramSessionId };
+module.exports = {
+  canAccessTelegramWorkspace,
+  isTelegramAdmin,
+  telegramSessionId,
+};

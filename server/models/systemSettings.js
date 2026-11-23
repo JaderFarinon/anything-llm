@@ -25,7 +25,10 @@ function decryptSqlConnectionString(connectionString) {
 }
 
 function encryptSqlConnectionString(connectionString) {
-  if (!connectionString || connectionString.startsWith(SQL_CONNECTION_ENCRYPTED_PREFIX))
+  if (
+    !connectionString ||
+    connectionString.startsWith(SQL_CONNECTION_ENCRYPTED_PREFIX)
+  )
     return connectionString;
   const encrypted = new EncryptionManager().encrypt(connectionString);
   if (!encrypted) throw new Error("Could not encrypt SQL connection details.");
@@ -417,7 +420,9 @@ const SystemSettings = {
         []
       ).map((connection) => ({
         ...connection,
-        connectionString: decryptSqlConnectionString(connection.connectionString),
+        connectionString: decryptSqlConnectionString(
+          connection.connectionString
+        ),
       }));
       try {
         const updateList = safeJsonParse(updates, []);
@@ -434,7 +439,9 @@ const SystemSettings = {
         }
         const updatedConnections = mergedConnections.map((connection) => ({
           ...connection,
-          connectionString: encryptSqlConnectionString(connection.connectionString),
+          connectionString: encryptSqlConnectionString(
+            connection.connectionString
+          ),
         }));
         return JSON.stringify(updatedConnections);
       } catch {
@@ -791,12 +798,19 @@ const SystemSettings = {
       }
 
       await Promise.all(updatePromises);
-      if (Object.prototype.hasOwnProperty.call(updates, "agent_sql_connections")) {
+      if (
+        Object.prototype.hasOwnProperty.call(updates, "agent_sql_connections")
+      ) {
         try {
-          const { syncSqlKnowledgeIndex } = require("../utils/agents/aibitat/plugins/sql-agent/knowledge-index");
+          const {
+            syncSqlKnowledgeIndex,
+          } = require("../utils/agents/aibitat/plugins/sql-agent/knowledge-index");
           await syncSqlKnowledgeIndex(await this.getSQLConnections());
         } catch (error) {
-          console.error("Could not sync SQL connection knowledge to vector DB:", error.message);
+          console.error(
+            "Could not sync SQL connection knowledge to vector DB:",
+            error.message
+          );
         }
       }
       return { success: true, error: null };
@@ -1175,8 +1189,6 @@ const SystemSettings = {
         scheme: parsed.scheme,
       };
     });
-
-    return connections;
   },
   getFeatureFlags: async function () {
     return {
@@ -1239,16 +1251,16 @@ function normalizeSQLConnectionScope(
   scopeIdValue,
   existingConnection = null
 ) {
-  const accessScope =
-    String(scopeValue || existingConnection?.accessScope || "global").trim();
+  const accessScope = String(
+    scopeValue || existingConnection?.accessScope || "global"
+  ).trim();
   if (!["global", "company", "workspace", "user"].includes(accessScope))
     throw new Error("Invalid SQL connection access scope.");
   const rawScopeId =
     scopeIdValue !== undefined
       ? scopeIdValue
       : existingConnection?.accessScopeId;
-  const accessScopeId =
-    accessScope === "global" ? null : Number(rawScopeId);
+  const accessScopeId = accessScope === "global" ? null : Number(rawScopeId);
   if (
     accessScope !== "global" &&
     (!Number.isInteger(accessScopeId) || accessScopeId <= 0)
@@ -1269,7 +1281,8 @@ async function validateSQLConnectionScope(connection) {
     where: { id: connection.accessScopeId },
     select: { id: true },
   });
-  if (!target) throw new Error("The SQL connection scope target does not exist.");
+  if (!target)
+    throw new Error("The SQL connection scope target does not exist.");
   return true;
 }
 
@@ -1323,7 +1336,11 @@ function mergeConnections(existingConnections = [], updates = []) {
         connectionsMap.set(newId, {
           engine,
           database_id: newId,
-          description: String(description ?? existingConnection?.description ?? "").trim().slice(0, 2000),
+          description: String(
+            description ?? existingConnection?.description ?? ""
+          )
+            .trim()
+            .slice(0, 2000),
           ...normalizeSQLConnectionScope(
             accessScope,
             accessScopeId,
@@ -1331,7 +1348,9 @@ function mergeConnections(existingConnections = [], updates = []) {
           ),
           connectionString,
           ...(schema && { schema }),
-          queries: normalizeSavedQueries(queries ?? existingConnection?.queries ?? []),
+          queries: normalizeSavedQueries(
+            queries ?? existingConnection?.queries ?? []
+          ),
         });
         break;
       }
@@ -1351,7 +1370,9 @@ function mergeConnections(existingConnections = [], updates = []) {
         connectionsMap.set(slugifiedId, {
           engine,
           database_id: slugifiedId,
-          description: String(description ?? "").trim().slice(0, 2000),
+          description: String(description ?? "")
+            .trim()
+            .slice(0, 2000),
           ...normalizeSQLConnectionScope(accessScope, accessScopeId),
           connectionString,
           ...(schema && { schema }),
@@ -1386,8 +1407,12 @@ function mergeConnections(existingConnections = [], updates = []) {
 }
 
 function normalizeSavedQueries(queries = []) {
-  const { validateReadOnlyQuery } = require("../utils/agents/aibitat/plugins/sql-agent/readOnly");
-  const { getQueryParameterNames } = require("../utils/agents/aibitat/plugins/sql-agent/query-template");
+  const {
+    validateReadOnlyQuery,
+  } = require("../utils/agents/aibitat/plugins/sql-agent/readOnly");
+  const {
+    getQueryParameterNames,
+  } = require("../utils/agents/aibitat/plugins/sql-agent/query-template");
   if (!Array.isArray(queries) || queries.length > 100)
     throw new Error("A database can have up to 100 saved queries.");
 
@@ -1398,7 +1423,11 @@ function normalizeSavedQueries(queries = []) {
     const description = String(query?.description || "").trim();
     const sql = String(query?.sql || "").trim();
     const examples = Array.isArray(query?.examples)
-      ? [...new Set(query.examples.map((value) => String(value).trim()).filter(Boolean))].slice(0, 20)
+      ? [
+          ...new Set(
+            query.examples.map((value) => String(value).trim()).filter(Boolean)
+          ),
+        ].slice(0, 20)
       : [];
     const parameters = Array.isArray(query?.parameters) ? query.parameters : [];
     if (!/^[A-Za-z0-9_-]{1,100}$/.test(id) || ids.has(id))
@@ -1407,7 +1436,9 @@ function normalizeSavedQueries(queries = []) {
     if (!title || title.length > 120)
       throw new Error("Query titles must be between 1 and 120 characters.");
     if (!description || description.length > 2000)
-      throw new Error("Query descriptions must be between 1 and 2000 characters.");
+      throw new Error(
+        "Query descriptions must be between 1 and 2000 characters."
+      );
     if (!sql || sql.length > 20000)
       throw new Error("SQL templates must be between 1 and 20000 characters.");
     if (parameters.length > 30)
@@ -1435,14 +1466,17 @@ function normalizeSavedQueries(queries = []) {
         type,
         description: parameterDescription,
         required: parameter?.required !== false,
-        ...(parameter?.defaultValue !== undefined && parameter.defaultValue !== ""
+        ...(parameter?.defaultValue !== undefined &&
+        parameter.defaultValue !== ""
           ? { defaultValue: parameter.defaultValue }
           : {}),
       };
     });
     const undefinedNames = names.filter((name) => !parameterNames.has(name));
     if (undefinedNames.length)
-      throw new Error(`Add parameter details for: ${undefinedNames.join(", ")}.`);
+      throw new Error(
+        `Add parameter details for: ${undefinedNames.join(", ")}.`
+      );
 
     return {
       id,

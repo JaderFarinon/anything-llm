@@ -17,7 +17,8 @@ function utcDayRange(dateValue) {
 }
 
 function metricsFromResponse(response) {
-  const parsed = typeof response === "string" ? safeJsonParse(response, {}) : response;
+  const parsed =
+    typeof response === "string" ? safeJsonParse(response, {}) : response;
   return parsed && typeof parsed === "object" ? parsed : {};
 }
 
@@ -68,7 +69,9 @@ function summarizeChats(chats, reportDate) {
     ? durations.reduce((total, item) => total + item, 0) / durations.length
     : null;
   const p95 = durations.length
-    ? durations[Math.min(durations.length - 1, Math.ceil(durations.length * 0.95) - 1)]
+    ? durations[
+        Math.min(durations.length - 1, Math.ceil(durations.length * 0.95) - 1)
+      ]
     : null;
 
   return {
@@ -111,11 +114,9 @@ async function buildDailyQualityReport(dateValue, { persist = true } = {}) {
   const report = summarizeChats(chats, date);
 
   if (persist) {
-    const prior = await EventLogs.where(
-      { event: REPORT_EVENT },
-      500,
-      { id: "desc" }
-    );
+    const prior = await EventLogs.where({ event: REPORT_EVENT }, 500, {
+      id: "desc",
+    });
     const existing = prior.find(
       (event) => safeJsonParse(event.metadata, {})?.date === date
     );

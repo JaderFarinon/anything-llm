@@ -8,8 +8,9 @@ let activeSync = null;
 
 function connectionKnowledge(connection) {
   const queries = (connection.queries || []).map((query) => {
-    const parameters = (query.parameters || []).map((parameter) =>
-      `- ${parameter.name} (${parameter.type}${parameter.required !== false ? ", obrigatório" : ", opcional"}): ${parameter.description}`
+    const parameters = (query.parameters || []).map(
+      (parameter) =>
+        `- ${parameter.name} (${parameter.type}${parameter.required !== false ? ", obrigatório" : ", opcional"}): ${parameter.description}`
     );
     return [
       `Consulta: ${query.title}`,
@@ -68,7 +69,8 @@ async function syncSqlKnowledgeIndex(connections = []) {
     .createHash("sha256")
     .update(JSON.stringify(catalog))
     .digest("hex");
-  if (catalogHash === indexedCatalogHash) return { success: true, unchanged: true };
+  if (catalogHash === indexedCatalogHash)
+    return { success: true, unchanged: true };
   if (activeSync) return activeSync;
 
   activeSync = (async () => {
@@ -79,7 +81,9 @@ async function syncSqlKnowledgeIndex(connections = []) {
       docId: { startsWith: SQL_KNOWLEDGE_DOC_PREFIX },
     });
     const wantedDocIds = new Set(
-      catalog.map(({ database_id }) => `${SQL_KNOWLEDGE_DOC_PREFIX}${database_id}`)
+      catalog.map(
+        ({ database_id }) => `${SQL_KNOWLEDGE_DOC_PREFIX}${database_id}`
+      )
     );
 
     // Remove the former shared catalog if an instance is upgrading from the
@@ -122,7 +126,8 @@ async function syncSqlKnowledgeIndex(connections = []) {
           title: `Contexto SQL: ${connection.database_id}`,
           docAuthor: "AnyHealth administrator",
           docSource: "SQL connection catalog",
-          description: connection.description || "SQL saved-query documentation",
+          description:
+            connection.description || "SQL saved-query documentation",
           published: new Date().toISOString(),
           wordCount: pageContent.split(/\s+/).length,
           pageContent,
@@ -150,7 +155,11 @@ async function syncSqlKnowledgeIndex(connections = []) {
   }
 }
 
-async function searchSqlKnowledgeIndex(connections = [], question, LLMConnector) {
+async function searchSqlKnowledgeIndex(
+  connections = [],
+  question,
+  LLMConnector
+) {
   if (!question || !LLMConnector) return [];
   const { getVectorDbClass } = require("../../../../helpers");
   const VectorDb = getVectorDbClass();

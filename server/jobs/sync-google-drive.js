@@ -18,7 +18,8 @@ const {
 const RECOVERY_INTERVAL_MS = 15 * 60 * 1000;
 const WATCH_RENEWAL_WINDOW_MS = 24 * 60 * 60 * 1000;
 const WATCH_EXPIRATION_MS = 6 * 24 * 60 * 60 * 1000;
-const MAX_FILE_BYTES = Number(process.env.GOOGLE_DRIVE_MAX_FILE_MB || 250) * 1024 * 1024;
+const MAX_FILE_BYTES =
+  Number(process.env.GOOGLE_DRIVE_MAX_FILE_MB || 250) * 1024 * 1024;
 
 function log(message, ...details) {
   console.log(`[GoogleDriveSync] ${message}`, ...details);
@@ -46,9 +47,13 @@ async function removeIndexedDocuments(fileRecord) {
     where: { driveFileId: fileRecord.id },
     include: { workspace: true },
   });
-  const workspaceIds = [...new Set(indexes.map(({ workspaceId }) => workspaceId))];
+  const workspaceIds = [
+    ...new Set(indexes.map(({ workspaceId }) => workspaceId)),
+  ];
   for (const workspaceId of workspaceIds) {
-    const workspace = indexes.find((index) => index.workspaceId === workspaceId)?.workspace;
+    const workspace = indexes.find(
+      (index) => index.workspaceId === workspaceId
+    )?.workspace;
     if (!workspace) continue;
     const workspaceIndexes = indexes.filter(
       (index) => index.workspaceId === workspaceId
@@ -74,7 +79,13 @@ async function removeIndexedDocuments(fileRecord) {
   });
 }
 
-async function saveDriveFile(connection, folder, workspace, driveFile, accessToken) {
+async function saveDriveFile(
+  connection,
+  folder,
+  workspace,
+  driveFile,
+  accessToken
+) {
   const existing = await prisma.google_drive_files.findUnique({
     where: {
       folderId_driveFileId: { folderId: folder.id, driveFileId: driveFile.id },
@@ -167,13 +178,17 @@ async function saveDriveFile(connection, folder, workspace, driveFile, accessTok
   await removeIndexedDocuments(record);
 
   const collector = new CollectorApi();
-  if (!(await collector.online())) throw new Error("O processador de documentos está indisponível.");
+  if (!(await collector.online()))
+    throw new Error("O processador de documentos está indisponível.");
 
   let temporaryFile = null;
   try {
     const downloaded = await DriveApi.downloadFile(accessToken, driveFile);
-    const extension = downloaded.extension || path.extname(driveFile.name || "");
-    const safeExtension = /^\.[a-z0-9]{1,12}$/i.test(extension) ? extension : "";
+    const extension =
+      downloaded.extension || path.extname(driveFile.name || "");
+    const safeExtension = /^\.[a-z0-9]{1,12}$/i.test(extension)
+      ? extension
+      : "";
     const temporaryName = `gdrive-${connection.id}-${driveFile.id}${safeExtension}`;
     temporaryFile = path.join(hotdirPath, temporaryName);
     fs.mkdirSync(hotdirPath, { recursive: true });
@@ -187,15 +202,24 @@ async function saveDriveFile(connection, folder, workspace, driveFile, accessTok
       driveFolderName: folder.name,
     });
     if (!result?.success || !result.documents?.length)
-      throw new Error(result?.reason || "O Google Drive não retornou conteúdo indexável.");
+      throw new Error(
+        result?.reason || "O Google Drive não retornou conteúdo indexável."
+      );
 
     const outputFolder = `google-drive-${connection.id}-${folder.id}`;
     moveProcessedDocsToFolder(result.documents, outputFolder);
     const locations = result.documents.map(({ location }) => location);
-    const embedding = await Document.addDocuments(workspace, locations, folder.addedByUserId);
+    const embedding = await Document.addDocuments(
+      workspace,
+      locations,
+      folder.addedByUserId
+    );
     const embeddedPaths = embedding.embedded || [];
     if (!embeddedPaths.length)
-      throw new Error((embedding.errors || []).join("; ") || "Não foi possível gerar os vetores do arquivo.");
+      throw new Error(
+        (embedding.errors || []).join("; ") ||
+          "Não foi possível gerar os vetores do arquivo."
+      );
 
     const [currentRecord, currentFolder] = await Promise.all([
       prisma.google_drive_files.findUnique({
@@ -239,7 +263,8 @@ async function saveDriveFile(connection, folder, workspace, driveFile, accessTok
     await prisma.google_drive_files.update({
       where: { id: record.id },
       data: {
-        status: embeddedPaths.length === locations.length ? "indexed" : "partial",
+        status:
+          embeddedPaths.length === locations.length ? "indexed" : "partial",
         lastError: embedding.failedToEmbed?.length
           ? `Não foi possível indexar: ${embedding.failedToEmbed.join(", ")}`
           : null,
@@ -248,7 +273,8 @@ async function saveDriveFile(connection, folder, workspace, driveFile, accessTok
       },
     });
   } finally {
-    if (temporaryFile && fs.existsSync(temporaryFile)) fs.rmSync(temporaryFile, { force: true });
+    if (temporaryFile && fs.existsSync(temporaryFile))
+      fs.rmSync(temporaryFile, { force: true });
   }
 }
 
@@ -270,7 +296,8 @@ async function scanFolder(connection, folder, accessToken) {
   const workspace = await prisma.workspaces.findUnique({
     where: { id: folder.workspaceId },
   });
-  if (!workspace) throw new Error(`Workspace da pasta ${folder.name} não existe.`);
+  if (!workspace)
+    throw new Error(`Workspace da pasta ${folder.name} não existe.`);
   const pending = [folder.driveFolderId];
   const seenFolders = new Set();
   while (pending.length) {
@@ -279,7 +306,11 @@ async function scanFolder(connection, folder, accessToken) {
     seenFolders.add(parentId);
     let pageToken = null;
     do {
-      const page = await DriveApi.listChildren(accessToken, parentId, pageToken);
+      const page = await DriveApi.listChildren(
+        accessToken,
+        parentId,
+        pageToken
+      );
       for (const file of page.files || []) {
         if (file.mimeType === "application/vnd.google-apps.folder") {
           pending.push(file.id);
@@ -329,7 +360,9 @@ async function isWithinSelectedFolder(accessToken, file, selectedFolderId) {
 async function applyChange(connection, folders, accessToken, change) {
   const driveFileId = change.fileId || change.file?.id;
   if (!driveFileId) return;
-  const current = change.file || (!change.removed ? await DriveApi.getFile(accessToken, driveFileId) : null);
+  const current =
+    change.file ||
+    (!change.removed ? await DriveApi.getFile(accessToken, driveFileId) : null);
   for (const folder of folders) {
     const wasTracked = await prisma.google_drive_files.findUnique({
       where: {
@@ -341,7 +374,11 @@ async function applyChange(connection, folders, accessToken, change) {
       await removeDriveFile(folder, driveFileId);
       continue;
     }
-    const belongs = await isWithinSelectedFolder(accessToken, current, folder.driveFolderId);
+    const belongs = await isWithinSelectedFolder(
+      accessToken,
+      current,
+      folder.driveFolderId
+    );
     if (!belongs) {
       if (wasTracked) await removeDriveFile(folder, driveFileId);
       continue;
@@ -349,7 +386,8 @@ async function applyChange(connection, folders, accessToken, change) {
     const workspace = await prisma.workspaces.findUnique({
       where: { id: folder.workspaceId },
     });
-    if (workspace) await saveDriveFile(connection, folder, workspace, current, accessToken);
+    if (workspace)
+      await saveDriveFile(connection, folder, workspace, current, accessToken);
   }
 }
 
@@ -363,9 +401,10 @@ async function ensureWatch(connection, accessToken, pageToken, config) {
   )
     return connection;
 
-  const previousChannel = connection.channelId && connection.channelResourceId
-    ? { id: connection.channelId, resourceId: connection.channelResourceId }
-    : null;
+  const previousChannel =
+    connection.channelId && connection.channelResourceId
+      ? { id: connection.channelId, resourceId: connection.channelResourceId }
+      : null;
   const channelId = uuidv4();
   const token = crypto.randomBytes(32).toString("base64url");
   await prisma.google_drive_connections.update({
@@ -404,7 +443,11 @@ async function ensureWatch(connection, accessToken, pageToken, config) {
   } catch (error) {
     await prisma.google_drive_connections.update({
       where: { id: connection.id },
-      data: { channelId: null, channelTokenHash: null, channelResourceId: null },
+      data: {
+        channelId: null,
+        channelTokenHash: null,
+        channelResourceId: null,
+      },
     });
     throw error;
   }
@@ -461,14 +504,23 @@ async function syncConnection(connection) {
     });
     for (const trackedFile of retryFiles) {
       try {
-        const currentFile = await DriveApi.getFile(accessToken, trackedFile.driveFileId);
+        const currentFile = await DriveApi.getFile(
+          accessToken,
+          trackedFile.driveFileId
+        );
         const workspace = await prisma.workspaces.findUnique({
           where: { id: trackedFile.folder.workspaceId },
         });
         if (currentFile.trashed) {
           await removeDriveFile(trackedFile.folder, trackedFile.driveFileId);
         } else if (workspace) {
-          await saveDriveFile(connection, trackedFile.folder, workspace, currentFile, accessToken);
+          await saveDriveFile(
+            connection,
+            trackedFile.folder,
+            workspace,
+            currentFile,
+            accessToken
+          );
         }
       } catch (error) {
         await prisma.google_drive_files.update({
@@ -547,14 +599,21 @@ async function purgeDisallowedFolders() {
         await removeIndexedDocuments(file);
         await prisma.google_drive_files.update({
           where: { id: file.id },
-          data: { status: folder.status, lastError: null, lastSyncedAt: new Date() },
+          data: {
+            status: folder.status,
+            lastError: null,
+            lastSyncedAt: new Date(),
+          },
         });
       } catch (error) {
         await prisma.google_drive_files.update({
           where: { id: file.id },
           data: { status: "failed", lastError: error.message.slice(0, 1000) },
         });
-        log(`Não foi possível retirar o arquivo bloqueado ${file.name}:`, error.message);
+        log(
+          `Não foi possível retirar o arquivo bloqueado ${file.name}:`,
+          error.message
+        );
       }
     }
   }
@@ -580,7 +639,10 @@ async function purgeBlockedFiles() {
         where: { id: file.id },
         data: { status: "failed", lastError: error.message.slice(0, 1000) },
       });
-      log(`Não foi possível remover o conteúdo bloqueado ${file.name}:`, error.message);
+      log(
+        `Não foi possível remover o conteúdo bloqueado ${file.name}:`,
+        error.message
+      );
     }
   }
 }
@@ -603,7 +665,9 @@ async function purgeBlockedFiles() {
       take: 20,
     });
     for (const connection of connections) await syncConnection(connection);
-    log(`Sincronização concluída; ${connections.length} conexão(ões) processada(s).`);
+    log(
+      `Sincronização concluída; ${connections.length} conexão(ões) processada(s).`
+    );
   } catch (error) {
     log("Falha no ciclo de sincronização:", error.message);
     process.exitCode = 1;

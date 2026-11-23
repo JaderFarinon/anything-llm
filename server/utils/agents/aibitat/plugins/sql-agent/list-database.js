@@ -39,9 +39,9 @@ module.exports.SqlAgentListDatabase = {
               `${this.caller}: Checking what are the available databases.`
             );
 
-            const connections = (await listSQLConnections(
-              sqlConnectionScopeContext(this.super)
-            )).map((conn) => {
+            const connections = (
+              await listSQLConnections(sqlConnectionScopeContext(this.super))
+            ).map((conn) => {
               const { connectionString: _connectionString, ...rest } = conn;
               return rest;
             });

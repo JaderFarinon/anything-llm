@@ -120,11 +120,7 @@ function workspaceParsedFilesEndpoints(app) {
 
   app.post(
     "/workspace/:slug/move-parsed-files",
-    [
-      validatedRequest,
-      flexUserRoleValid([ROLES.admin]),
-      validWorkspaceSlug,
-    ],
+    [validatedRequest, flexUserRoleValid([ROLES.admin]), validWorkspaceSlug],
     async function (request, response) {
       try {
         const user = await userFromSession(request, response);

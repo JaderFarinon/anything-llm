@@ -17,7 +17,12 @@ function createAuthorizationUrl({ clientId, redirectUri, state }) {
   return `${OAUTH_URL}?${params.toString()}`;
 }
 
-async function exchangeAuthorizationCode({ clientId, clientSecret, redirectUri, code }) {
+async function exchangeAuthorizationCode({
+  clientId,
+  clientSecret,
+  redirectUri,
+  code,
+}) {
   return await postToken({
     client_id: clientId,
     client_secret: clientSecret,
@@ -45,7 +50,9 @@ async function postToken(body) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload.error)
     throw new Error(
-      payload.error_description || payload.error || "Google OAuth token exchange failed."
+      payload.error_description ||
+        payload.error ||
+        "Google OAuth token exchange failed."
     );
   return payload;
 }
@@ -74,14 +81,19 @@ async function getAccount(accessToken) {
 }
 
 async function listFolders(accessToken, { pageToken = null, query = "" } = {}) {
-  const clauses = ["mimeType = 'application/vnd.google-apps.folder'", "trashed = false"];
-  if (query.trim()) clauses.push(`name contains '${query.trim().replace(/'/g, "\\'")}'`);
+  const clauses = [
+    "mimeType = 'application/vnd.google-apps.folder'",
+    "trashed = false",
+  ];
+  if (query.trim())
+    clauses.push(`name contains '${query.trim().replace(/'/g, "\\'")}'`);
   return await driveRequest(accessToken, "/files", {
     q: clauses.join(" and "),
     orderBy: "name",
     pageSize: "100",
     pageToken,
-    fields: "nextPageToken,files(id,name,mimeType,modifiedTime,parents,webViewLink)",
+    fields:
+      "nextPageToken,files(id,name,mimeType,modifiedTime,parents,webViewLink)",
     supportsAllDrives: "true",
     includeItemsFromAllDrives: "true",
   });
@@ -118,7 +130,10 @@ async function listChanges(accessToken, pageToken) {
   });
 }
 
-async function watchChanges(accessToken, { pageToken, address, id, token, expiration }) {
+async function watchChanges(
+  accessToken,
+  { pageToken, address, id, token, expiration }
+) {
   const url = new URL(`${DRIVE_API}/changes/watch`);
   url.searchParams.set("pageToken", pageToken);
   url.searchParams.set("includeRemoved", "true");
@@ -134,7 +149,9 @@ async function watchChanges(accessToken, { pageToken, address, id, token, expira
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok)
-    throw new Error(payload.error?.message || `Drive watch returned ${response.status}.`);
+    throw new Error(
+      payload.error?.message || `Drive watch returned ${response.status}.`
+    );
   return payload;
 }
 
@@ -148,14 +165,20 @@ async function stopChannel(accessToken, { id, resourceId }) {
     body: JSON.stringify({ id, resourceId }),
   });
   if (!response.ok && response.status !== 404)
-    throw new Error(`Could not stop Google Drive notification channel (${response.status}).`);
+    throw new Error(
+      `Could not stop Google Drive notification channel (${response.status}).`
+    );
 }
 
 async function getFile(accessToken, fileId) {
-  return await driveRequest(accessToken, `/files/${encodeURIComponent(fileId)}`, {
-    fields: "id,name,mimeType,modifiedTime,md5Checksum,parents,trashed,size",
-    supportsAllDrives: "true",
-  });
+  return await driveRequest(
+    accessToken,
+    `/files/${encodeURIComponent(fileId)}`,
+    {
+      fields: "id,name,mimeType,modifiedTime,md5Checksum,parents,trashed,size",
+      supportsAllDrives: "true",
+    }
+  );
 }
 
 async function downloadFile(accessToken, file) {
@@ -173,12 +196,15 @@ async function downloadFile(accessToken, file) {
   });
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.error?.message || `Drive download returned ${response.status}.`);
+    throw new Error(
+      payload.error?.message || `Drive download returned ${response.status}.`
+    );
   }
   return {
     buffer: Buffer.from(await response.arrayBuffer()),
     extension: exportConfig?.[1] || "",
-    contentType: response.headers.get("content-type") || "application/octet-stream",
+    contentType:
+      response.headers.get("content-type") || "application/octet-stream",
   };
 }
 

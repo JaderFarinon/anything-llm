@@ -22,9 +22,21 @@ async function handleWorkspaceSelect({
   const workspaceId = parseInt(data.slice(3), 10);
   const user = await ctx.getUser?.(chatId);
   const workspace = await Workspace.get({ id: workspaceId });
-  if (!workspace) return ctx.bot.answerCallbackQuery(query.id, { text: "Workspace indisponível." });
-  if ((await SystemSettings.isMultiUserMode()) && user?.role !== "admin" && !(await WorkspaceUser.get({ user_id: user?.id || -1, workspace_id: workspace.id }))) {
-    return ctx.bot.answerCallbackQuery(query.id, { text: "Você não tem acesso a este workspace." });
+  if (!workspace)
+    return ctx.bot.answerCallbackQuery(query.id, {
+      text: "Workspace indisponível.",
+    });
+  if (
+    (await SystemSettings.isMultiUserMode()) &&
+    user?.role !== "admin" &&
+    !(await WorkspaceUser.get({
+      user_id: user?.id || -1,
+      workspace_id: workspace.id,
+    }))
+  ) {
+    return ctx.bot.answerCallbackQuery(query.id, {
+      text: "Você não tem acesso a este workspace.",
+    });
   }
   await showThreadMenu(ctx, chatId, workspaceId, 0, messageId);
   await ctx.bot.answerCallbackQuery(query.id);

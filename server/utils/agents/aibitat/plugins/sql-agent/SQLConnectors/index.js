@@ -1,5 +1,4 @@
 const { SystemSettings } = require("../../../../../../models/systemSettings");
-const { safeJsonParse } = require("../../../../../http");
 const prisma = require("../../../../../../utils/prisma");
 
 /**
@@ -54,7 +53,9 @@ async function listSQLConnections(scopeContext = null) {
 
   const { userId = null, workspaceId = null } = scopeContext || {};
   const globalConnections = () =>
-    connections.filter((connection) => (connection.accessScope || "global") === "global");
+    connections.filter(
+      (connection) => (connection.accessScope || "global") === "global"
+    );
   if (!userId) return globalConnections();
 
   const user = await prisma.users.findUnique({
@@ -76,7 +77,9 @@ async function listSQLConnections(scopeContext = null) {
         })
       : null,
   ]);
-  const companyIds = new Set(companyMemberships.map(({ companyId }) => companyId));
+  const companyIds = new Set(
+    companyMemberships.map(({ companyId }) => companyId)
+  );
 
   return connections.filter((connection) => {
     const scope = connection.accessScope || "global";

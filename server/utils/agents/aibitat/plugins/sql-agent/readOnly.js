@@ -48,7 +48,8 @@ function normalizeForValidation(query = "") {
     }
     if (!quote && char === "/" && next === "*") {
       i += 2;
-      while (i < query.length && !(query[i] === "*" && query[i + 1] === "/")) i++;
+      while (i < query.length && !(query[i] === "*" && query[i + 1] === "/"))
+        i++;
       if (i < query.length) i++;
       output += " ";
       continue;
@@ -76,7 +77,10 @@ function normalizeForValidation(query = "") {
     }
     output += char;
   }
-  return output.trim().replace(/;+\s*$/, "").trim();
+  return output
+    .trim()
+    .replace(/;+\s*$/, "")
+    .trim();
 }
 
 function validateReadOnlyQuery(query = "") {
@@ -86,7 +90,10 @@ function validateReadOnlyQuery(query = "") {
 
   const normalized = normalizeForValidation(query);
   if (!normalized || normalized.includes(";")) {
-    return { valid: false, reason: "Only one read-only SQL statement is allowed." };
+    return {
+      valid: false,
+      reason: "Only one read-only SQL statement is allowed.",
+    };
   }
 
   const tokens = normalized.match(/[A-Za-z_][A-Za-z0-9_$]*/g) || [];

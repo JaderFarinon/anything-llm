@@ -58,16 +58,22 @@ async function canAutomaticallyUseSqlAgent(user, workspace) {
     );
     if (!enabledSkills.includes("sql-agent")) return false;
 
-    const { listSQLConnections } = require("../agents/aibitat/plugins/sql-agent/SQLConnectors");
+    const {
+      listSQLConnections,
+    } = require("../agents/aibitat/plugins/sql-agent/SQLConnectors");
     const connections = await listSQLConnections({
       userId: user?.id ?? null,
       workspaceId: workspace.id,
     });
     return connections.some(
-      (connection) => Array.isArray(connection.queries) && connection.queries.length > 0
+      (connection) =>
+        Array.isArray(connection.queries) && connection.queries.length > 0
     );
   } catch (error) {
-    console.error("Could not resolve automatic SQL agent access:", error.message);
+    console.error(
+      "Could not resolve automatic SQL agent access:",
+      error.message
+    );
     return false;
   }
 }
@@ -109,9 +115,7 @@ async function streamChatWithWorkspace(
   if (isGoogleDriveFolderListRequest(updatedMessage)) {
     let textResponse;
     try {
-      textResponse = formatConnectedFolders(
-        await listConnectedFolders(user)
-      );
+      textResponse = formatConnectedFolders(await listConnectedFolders(user));
     } catch (error) {
       console.error("Google Drive folder listing failed:", error.message);
       textResponse =
@@ -120,7 +124,12 @@ async function streamChatWithWorkspace(
     await WorkspaceChats.new({
       workspaceId: workspace.id,
       prompt: message,
-      response: { text: textResponse, sources: [], type: chatMode, attachments },
+      response: {
+        text: textResponse,
+        sources: [],
+        type: chatMode,
+        attachments,
+      },
       threadId: thread?.id || null,
       include: true,
       user,
@@ -354,12 +363,14 @@ async function streamChatWithWorkspace(
     ...filledSources.contextTexts,
     ...driveSearch.contextTexts,
   ];
-  sources = [...sources, ...vectorSearchResults.sources, ...driveSearch.sources];
+  sources = [
+    ...sources,
+    ...vectorSearchResults.sources,
+    ...driveSearch.sources,
+  ];
 
   const noDriveResults =
-    driveDocumentLookup &&
-    driveSearch.searched &&
-    contextTexts.length === 0;
+    driveDocumentLookup && driveSearch.searched && contextTexts.length === 0;
 
   // If in query mode and no context chunks are found from search, backfill, or pins -  do not
   // let the LLM try to hallucinate a response or use general knowledge and exit early

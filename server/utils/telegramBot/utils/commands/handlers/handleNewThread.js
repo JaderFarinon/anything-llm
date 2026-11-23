@@ -10,7 +10,10 @@ const { canAccessTelegramWorkspace } = require("../../access");
 async function handleNewThread(ctx, chatId) {
   const state = ctx.getState(chatId);
   const workspace = await Workspace.get({ slug: state.workspaceSlug });
-  if (!workspace || !(await canAccessTelegramWorkspace(ctx, chatId, workspace))) {
+  if (
+    !workspace ||
+    !(await canAccessTelegramWorkspace(ctx, chatId, workspace))
+  ) {
     await ctx.bot.sendMessage(chatId, "No workspace configured.");
     return;
   }

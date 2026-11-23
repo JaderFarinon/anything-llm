@@ -1,7 +1,10 @@
 const { Workspace } = require("../../../../../models/workspace");
 const { WorkspaceThread } = require("../../../../../models/workspaceThread");
 const { WorkspaceChats } = require("../../../../../models/workspaceChats");
-const { canAccessTelegramWorkspace, telegramSessionId } = require("../../access");
+const {
+  canAccessTelegramWorkspace,
+  telegramSessionId,
+} = require("../../access");
 
 const SOURCES_PER_PAGE = 6;
 
@@ -124,13 +127,20 @@ function buildSourcesMenu(sources, page = 0) {
 async function showSourcesMenu(ctx, chatId, page = 0, messageId = null) {
   const state = ctx.getState(chatId);
   const workspace = await Workspace.get({ slug: state.workspaceSlug });
-  if (!workspace || !(await canAccessTelegramWorkspace(ctx, chatId, workspace))) {
+  if (
+    !workspace ||
+    !(await canAccessTelegramWorkspace(ctx, chatId, workspace))
+  ) {
     await ctx.bot.sendMessage(chatId, "No workspace configured.");
     return;
   }
 
   const thread = state.threadSlug
-    ? await WorkspaceThread.get({ slug: state.threadSlug, workspace_id: workspace.id, user_id: (await ctx.getUser?.(chatId))?.id || null })
+    ? await WorkspaceThread.get({
+        slug: state.threadSlug,
+        workspace_id: workspace.id,
+        user_id: (await ctx.getUser?.(chatId))?.id || null,
+      })
     : null;
 
   const user = await ctx.getUser?.(chatId);

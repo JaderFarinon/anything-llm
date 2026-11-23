@@ -68,7 +68,9 @@ function companyEndpoints(app) {
       try {
         const { userIds } = reqBody(request);
         if (!Array.isArray(userIds))
-          return response.status(400).json({ error: "userIds deve ser uma lista." });
+          return response
+            .status(400)
+            .json({ error: "userIds deve ser uma lista." });
         const company = await Company.setMembers(request.params.id, userIds);
         response.status(200).json({ company });
       } catch (error) {

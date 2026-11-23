@@ -65,11 +65,9 @@ module.exports.SqlAgentGetTableSchema = {
           handler: async function ({ database_id = "", table_name = "" }) {
             this.super.handlerProps.log(`Using the sql-get-table-schema tool.`);
             try {
-              const databaseConfig = (await listSQLConnections(
-                sqlConnectionScopeContext(this.super)
-              )).find(
-                (db) => db.database_id === database_id
-              );
+              const databaseConfig = (
+                await listSQLConnections(sqlConnectionScopeContext(this.super))
+              ).find((db) => db.database_id === database_id);
               if (!databaseConfig) {
                 this.super.handlerProps.log(
                   `sql-get-table-schema to find config!`,

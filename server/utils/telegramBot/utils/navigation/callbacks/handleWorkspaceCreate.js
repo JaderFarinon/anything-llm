@@ -11,7 +11,9 @@ const { SystemSettings } = require("../../../../../models/systemSettings");
 async function handleWorkspaceCreate({ ctx, chatId, query } = {}) {
   const user = await ctx.getUser?.(chatId);
   if ((await SystemSettings.isMultiUserMode()) && user?.role !== "admin") {
-    await ctx.bot.answerCallbackQuery(query.id, { text: "Somente administradores podem criar workspaces." });
+    await ctx.bot.answerCallbackQuery(query.id, {
+      text: "Somente administradores podem criar workspaces.",
+    });
     return;
   }
   const botName = ctx.config.bot_username || "Bot";

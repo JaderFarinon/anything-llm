@@ -34,7 +34,11 @@ process.on("message", async (payload) => {
     };
 
     const user = userId ? await User.get({ id: Number(userId) }) : null;
-    if ((multiUserMode && (!user || user.suspended)) || (userId && (!user || user.suspended))) throw new Error("Telegram account is no longer authorized.");
+    if (
+      (multiUserMode && (!user || user.suspended)) ||
+      (userId && (!user || user.suspended))
+    )
+      throw new Error("Telegram account is no longer authorized.");
     const workspace = await Workspace.get({ slug: workspaceSlug });
     if (!workspace) {
       await bot.sendMessage(
@@ -45,12 +49,28 @@ process.on("message", async (payload) => {
       return;
     }
 
-    if (multiUserMode && user?.role !== "admin" && !(await WorkspaceUser.get({ user_id: user.id, workspace_id: workspace.id }))) {
-      await bot.sendMessage(chatId, "Você não tem acesso a este workspace. Use /switch para escolher um workspace liberado.");
+    if (
+      multiUserMode &&
+      user?.role !== "admin" &&
+      !(await WorkspaceUser.get({
+        user_id: user.id,
+        workspace_id: workspace.id,
+      }))
+    ) {
+      await bot.sendMessage(
+        chatId,
+        "Você não tem acesso a este workspace. Use /switch para escolher um workspace liberado."
+      );
       conclude();
       return;
     }
-    const thread = threadSlug ? await WorkspaceThread.get({ slug: threadSlug, workspace_id: workspace.id, user_id: user?.id || null }) : null;
+    const thread = threadSlug
+      ? await WorkspaceThread.get({
+          slug: threadSlug,
+          workspace_id: workspace.id,
+          user_id: user?.id || null,
+        })
+      : null;
 
     await streamResponse({
       ctx,

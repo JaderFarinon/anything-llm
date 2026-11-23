@@ -1,7 +1,10 @@
 const { Workspace } = require("../../../../../models/workspace");
 const { WorkspaceChats } = require("../../../../../models/workspaceChats");
 const { WorkspaceThread } = require("../../../../../models/workspaceThread");
-const { canAccessTelegramWorkspace, telegramSessionId } = require("../../access");
+const {
+  canAccessTelegramWorkspace,
+  telegramSessionId,
+} = require("../../access");
 const THREADS_PER_PAGE = 8;
 
 /**
@@ -21,7 +24,8 @@ async function showThreadMenu(
 ) {
   const pageNum = typeof page === "number" && !isNaN(page) ? page : 0;
   const workspace = await Workspace.get({ id: workspaceId });
-  if (!workspace || !(await canAccessTelegramWorkspace(ctx, chatId, workspace))) return;
+  if (!workspace || !(await canAccessTelegramWorkspace(ctx, chatId, workspace)))
+    return;
 
   const user = await ctx.getUser?.(chatId);
   const threads = await WorkspaceThread.where({

@@ -322,7 +322,7 @@ class Weaviate extends VectorDatabase {
       if (!weaviateClassExits) {
         await client.collections.createFromSchema({
           class: camelCase(namespace),
-              description: `Class created by AnyHealth named ${camelCase(
+          description: `Class created by AnyHealth named ${camelCase(
             namespace
           )}`,
           vectorizer: "none",

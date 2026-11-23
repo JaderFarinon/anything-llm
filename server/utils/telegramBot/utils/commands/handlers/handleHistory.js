@@ -1,5 +1,8 @@
 const { Workspace } = require("../../../../../models/workspace");
-const { canAccessTelegramWorkspace, telegramSessionId } = require("../../access");
+const {
+  canAccessTelegramWorkspace,
+  telegramSessionId,
+} = require("../../access");
 const { WorkspaceThread } = require("../../../../../models/workspaceThread");
 const { WorkspaceChats } = require("../../../../../models/workspaceChats");
 const { convertToChatHistory } = require("../../../../helpers/chat/responses");
@@ -18,7 +21,10 @@ const MAX_HISTORY_COUNT = 50;
 async function handleHistory(ctx, chatId, messageText = "") {
   const state = ctx.getState(chatId);
   const workspace = await Workspace.get({ slug: state.workspaceSlug });
-  if (!workspace || !(await canAccessTelegramWorkspace(ctx, chatId, workspace))) {
+  if (
+    !workspace ||
+    !(await canAccessTelegramWorkspace(ctx, chatId, workspace))
+  ) {
     await ctx.bot.sendMessage(chatId, "No workspace configured.");
     return;
   }
@@ -29,7 +35,11 @@ async function handleHistory(ctx, chatId, messageText = "") {
     : DEFAULT_HISTORY_COUNT;
 
   const thread = state.threadSlug
-    ? await WorkspaceThread.get({ slug: state.threadSlug, workspace_id: workspace.id, user_id: (await ctx.getUser?.(chatId))?.id || null })
+    ? await WorkspaceThread.get({
+        slug: state.threadSlug,
+        workspace_id: workspace.id,
+        user_id: (await ctx.getUser?.(chatId))?.id || null,
+      })
     : null;
 
   const user = await ctx.getUser?.(chatId);

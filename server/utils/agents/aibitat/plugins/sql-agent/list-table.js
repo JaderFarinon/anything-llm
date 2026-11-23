@@ -58,11 +58,9 @@ module.exports.SqlAgentListTables = {
           handler: async function ({ database_id = "" }) {
             try {
               this.super.handlerProps.log(`Using the sql-list-tables tool.`);
-              const databaseConfig = (await listSQLConnections(
-                sqlConnectionScopeContext(this.super)
-              )).find(
-                (db) => db.database_id === database_id
-              );
+              const databaseConfig = (
+                await listSQLConnections(sqlConnectionScopeContext(this.super))
+              ).find((db) => db.database_id === database_id);
               if (!databaseConfig) {
                 this.super.handlerProps.log(
                   `sql-list-tables failed to find config!`,

@@ -14,7 +14,10 @@ const {
 async function handleStatus(ctx, chatId) {
   const state = ctx.getState(chatId);
   const workspace = await Workspace.get({ slug: state.workspaceSlug });
-  if (!workspace || !(await canAccessTelegramWorkspace(ctx, chatId, workspace))) {
+  if (
+    !workspace ||
+    !(await canAccessTelegramWorkspace(ctx, chatId, workspace))
+  ) {
     await ctx.bot.sendMessage(chatId, "No workspace configured.");
     return;
   }
@@ -22,7 +25,11 @@ async function handleStatus(ctx, chatId) {
   let threadName = "Default";
   if (state.threadSlug) {
     const user = await ctx.getUser?.(chatId);
-    const thread = await WorkspaceThread.get({ slug: state.threadSlug, workspace_id: workspace.id, user_id: user?.id || null });
+    const thread = await WorkspaceThread.get({
+      slug: state.threadSlug,
+      workspace_id: workspace.id,
+      user_id: user?.id || null,
+    });
     if (thread) threadName = thread.name;
   }
 

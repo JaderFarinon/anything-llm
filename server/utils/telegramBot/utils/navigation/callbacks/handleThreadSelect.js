@@ -16,7 +16,10 @@ async function handleThreadSelect({ ctx, chatId, query, data } = {}) {
   const threadId = parseInt(parts[1], 10);
 
   const workspace = await Workspace.get({ id: workspaceId });
-  if (!workspace || !(await canAccessTelegramWorkspace(ctx, chatId, workspace))) {
+  if (
+    !workspace ||
+    !(await canAccessTelegramWorkspace(ctx, chatId, workspace))
+  ) {
     await ctx.bot.answerCallbackQuery(query.id, {
       text: "Workspace not found.",
     });
@@ -27,7 +30,11 @@ async function handleThreadSelect({ ctx, chatId, query, data } = {}) {
   let threadName = "Default";
   if (threadId !== 0) {
     const user = await ctx.getUser?.(chatId);
-    const thread = await WorkspaceThread.get({ id: threadId, workspace_id: workspace.id, user_id: user?.id || null });
+    const thread = await WorkspaceThread.get({
+      id: threadId,
+      workspace_id: workspace.id,
+      user_id: user?.id || null,
+    });
     if (thread) {
       threadSlug = thread.slug;
       threadName = thread.name;

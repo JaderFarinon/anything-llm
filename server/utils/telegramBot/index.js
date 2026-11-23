@@ -123,7 +123,9 @@ class TelegramBotService {
         });
       }
     }
-    for (const [chatId, state] of Object.entries(config.linked_user_states || {})) {
+    for (const [chatId, state] of Object.entries(
+      config.linked_user_states || {}
+    )) {
       if (state?.workspaceSlug) {
         this.#chatState.set(Number(chatId), {
           workspaceSlug: state.workspaceSlug,
@@ -506,7 +508,10 @@ class TelegramBotService {
       if (multiUser) {
         const user = await User.get({ telegramChatId: String(msg.chat.id) });
         if (!user || user.suspended) {
-          await this.#bot.sendMessage(msg.chat.id, "Conta não vinculada. Acesse sua conta AnyHealth e gere um código em Perfil > Telegram.");
+          await this.#bot.sendMessage(
+            msg.chat.id,
+            "Conta não vinculada. Acesse sua conta AnyHealth e gere um código em Perfil > Telegram."
+          );
           return;
         }
         const userContext = { ...ctx, getUser: async () => user };
@@ -521,7 +526,9 @@ class TelegramBotService {
     };
 
     this.#bot.onText(commandPattern("start"), async (msg) => {
-      const token = String(msg.text || "").trim().split(/\s+/)[1];
+      const token = String(msg.text || "")
+        .trim()
+        .split(/\s+/)[1];
       if (!token) return;
       await this.#linkTelegramAccount(msg, token);
     });
@@ -595,9 +602,14 @@ class TelegramBotService {
       const worker = bgService.bree.workers.get(jobId);
 
       const multiUserMode = await this.checkMultiUserMode();
-      const telegramUser = multiUserMode ? await User.get({ telegramChatId: String(chatId) }) : null;
+      const telegramUser = multiUserMode
+        ? await User.get({ telegramChatId: String(chatId) })
+        : null;
       if (multiUserMode && (!telegramUser || telegramUser.suspended)) {
-        await ctx.bot.sendMessage(chatId, "Sua conta não está mais vinculada. Gere um novo vínculo na sua conta AnyHealth.");
+        await ctx.bot.sendMessage(
+          chatId,
+          "Sua conta não está mais vinculada. Gere um novo vínculo na sua conta AnyHealth."
+        );
         return;
       }
       if (worker && typeof worker.send === "function") {

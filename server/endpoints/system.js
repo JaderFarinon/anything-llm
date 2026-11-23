@@ -810,7 +810,8 @@ function systemEndpoints(app) {
           })
         )?.value ?? null;
       const normalizedAppName =
-        typeof customAppName === "string" && /nexo|anything\s?llm/i.test(customAppName)
+        typeof customAppName === "string" &&
+        /nexo|anything\s?llm/i.test(customAppName)
           ? "AnyHealth"
           : customAppName;
       response.status(200).json({ customAppName: normalizedAppName });
@@ -1018,7 +1019,8 @@ function systemEndpoints(app) {
   app.get("/system/is-default-logo", async (_, response) => {
     try {
       const currentLogoFilename = await SystemSettings.currentLogoFilename();
-      const isDefaultLogo = !currentLogoFilename || isDefaultFilename(currentLogoFilename);
+      const isDefaultLogo =
+        !currentLogoFilename || isDefaultFilename(currentLogoFilename);
       response.status(200).json({ isDefaultLogo });
     } catch (error) {
       console.error("Error processing the logo request:", error);
@@ -1226,16 +1228,12 @@ function systemEndpoints(app) {
     async (_request, response) => {
       try {
         const [created, decisions] = await Promise.all([
-          EventLogs.where(
-            { event: "agent_sql_suggestion_created" },
-            100,
-            { id: "desc" }
-          ),
-          EventLogs.where(
-            { event: "agent_sql_suggestion_decided" },
-            500,
-            { id: "desc" }
-          ),
+          EventLogs.where({ event: "agent_sql_suggestion_created" }, 100, {
+            id: "desc",
+          }),
+          EventLogs.where({ event: "agent_sql_suggestion_decided" }, 500, {
+            id: "desc",
+          }),
         ]);
         const decidedIds = new Set(
           decisions
@@ -1247,7 +1245,9 @@ function systemEndpoints(app) {
           const metadata = safeJsonParse(event.metadata, {});
           if (!metadata.suggestionId || decidedIds.has(metadata.suggestionId))
             continue;
-          const chat = await WorkspaceChats.get({ id: Number(metadata.chatId) });
+          const chat = await WorkspaceChats.get({
+            id: Number(metadata.chatId),
+          });
           const responseText = safeJsonParse(chat?.response, {})?.text || "";
           pending.push({
             id: event.id,
@@ -1287,7 +1287,9 @@ function systemEndpoints(app) {
 
         const workspace = await Workspace.get({ id: chat.workspaceId });
         if (!workspace)
-          return response.status(404).json({ success: false, error: "Workspace not found." });
+          return response
+            .status(404)
+            .json({ success: false, error: "Workspace not found." });
 
         const settingsValue = await SystemSettings.getValueOrFallback(
           { label: "agent_sql_connections" },
@@ -1317,7 +1319,8 @@ function systemEndpoints(app) {
         if (!catalog.length)
           return response.status(400).json({
             success: false,
-            error: "Add approved SQL queries before generating query-matching suggestions.",
+            error:
+              "Add approved SQL queries before generating query-matching suggestions.",
           });
 
         const user = chat.user_id ? await User.get({ id: chat.user_id }) : null;
@@ -1334,7 +1337,8 @@ function systemEndpoints(app) {
         if (!connector?.getChatCompletion)
           return response.status(400).json({
             success: false,
-            error: "The workspace does not have a usable language model configured.",
+            error:
+              "The workspace does not have a usable language model configured.",
           });
 
         const savedResponse = safeJsonParse(chat.response, {})?.text || "";
@@ -1362,7 +1366,8 @@ function systemEndpoints(app) {
         if (!proposal)
           return response.status(502).json({
             success: false,
-            error: "The model did not return a usable suggestion. Try again or edit the query manually.",
+            error:
+              "The model did not return a usable suggestion. Try again or edit the query manually.",
           });
 
         const matchedQuery = catalog.find(
@@ -1370,9 +1375,7 @@ function systemEndpoints(app) {
             query.database_id === proposal.database_id &&
             query.id === proposal.query_id
         );
-        const suggestedDescription = String(
-          proposal.suggestedDescription || ""
-        )
+        const suggestedDescription = String(proposal.suggestedDescription || "")
           .trim()
           .slice(0, 2000);
         const exampleQuestions = Array.isArray(proposal.exampleQuestions)
@@ -1390,7 +1393,8 @@ function systemEndpoints(app) {
         )
           return response.status(502).json({
             success: false,
-            error: "The model returned a suggestion that does not match an approved query.",
+            error:
+              "The model returned a suggestion that does not match an approved query.",
           });
 
         const suggestion = {
@@ -1437,18 +1441,27 @@ function systemEndpoints(app) {
       try {
         const eventId = Number(request.params.eventId);
         const { decision } = reqBody(request);
-        if (!Number.isInteger(eventId) || !["approve", "reject"].includes(decision))
-          return response.status(400).json({ success: false, error: "Invalid review decision." });
+        if (
+          !Number.isInteger(eventId) ||
+          !["approve", "reject"].includes(decision)
+        )
+          return response
+            .status(400)
+            .json({ success: false, error: "Invalid review decision." });
 
         const [sourceEvent] = await EventLogs.where(
           { id: eventId, event: "agent_sql_suggestion_created" },
           1
         );
         if (!sourceEvent)
-          return response.status(404).json({ success: false, error: "Suggestion not found." });
+          return response
+            .status(404)
+            .json({ success: false, error: "Suggestion not found." });
         const source = safeJsonParse(sourceEvent.metadata, {});
         if (!source.suggestionId || !source.suggestion)
-          return response.status(400).json({ success: false, error: "Suggestion data is invalid." });
+          return response
+            .status(400)
+            .json({ success: false, error: "Suggestion data is invalid." });
         const decisions = await EventLogs.where(
           { event: "agent_sql_suggestion_decided" },
           500
@@ -1460,7 +1473,10 @@ function systemEndpoints(app) {
               source.suggestionId
           )
         )
-          return response.status(409).json({ success: false, error: "Suggestion was already reviewed." });
+          return response.status(409).json({
+            success: false,
+            error: "Suggestion was already reviewed.",
+          });
 
         if (decision === "approve") {
           const suggestion = source.suggestion;
@@ -1472,7 +1488,10 @@ function systemEndpoints(app) {
             (item) => item.id === suggestion.queryId
           );
           if (!connection || !query)
-            return response.status(409).json({ success: false, error: "The approved query no longer exists." });
+            return response.status(409).json({
+              success: false,
+              error: "The approved query no longer exists.",
+            });
 
           const examples = Array.isArray(query.examples) ? query.examples : [];
           const updatedQuery = {
@@ -1522,7 +1541,10 @@ function systemEndpoints(app) {
         response.json({ success: true, decision });
       } catch (error) {
         console.error("Could not apply agent suggestion:", error);
-        response.status(500).json({ success: false, error: "Could not save the review decision." });
+        response.status(500).json({
+          success: false,
+          error: "Could not save the review decision.",
+        });
       }
     }
   );
@@ -1534,7 +1556,10 @@ function systemEndpoints(app) {
       try {
         const { start, end, date } = utcDayRange(request.query.date);
         const offset = Math.max(0, Number(request.query.offset) || 0);
-        const limit = Math.min(50, Math.max(1, Number(request.query.limit) || 25));
+        const limit = Math.min(
+          50,
+          Math.max(1, Number(request.query.limit) || 25)
+        );
         const where = {
           include: true,
           createdAt: { gte: start, lt: end },
@@ -1548,18 +1573,32 @@ function systemEndpoints(app) {
           }),
           prisma.workspace_chats.count({ where }),
         ]);
-        const workspaceIds = [...new Set(chats.map((chat) => chat.workspaceId))];
-        const userIds = [...new Set(chats.map((chat) => chat.user_id).filter(Boolean))];
+        const workspaceIds = [
+          ...new Set(chats.map((chat) => chat.workspaceId)),
+        ];
+        const userIds = [
+          ...new Set(chats.map((chat) => chat.user_id).filter(Boolean)),
+        ];
         const [workspaces, users] = await Promise.all([
           workspaceIds.length
-            ? prisma.workspaces.findMany({ where: { id: { in: workspaceIds } }, select: { id: true, name: true } })
+            ? prisma.workspaces.findMany({
+                where: { id: { in: workspaceIds } },
+                select: { id: true, name: true },
+              })
             : [],
           userIds.length
-            ? prisma.users.findMany({ where: { id: { in: userIds } }, select: { id: true, username: true } })
+            ? prisma.users.findMany({
+                where: { id: { in: userIds } },
+                select: { id: true, username: true },
+              })
             : [],
         ]);
-        const workspaceNames = new Map(workspaces.map((item) => [item.id, item.name]));
-        const usernames = new Map(users.map((item) => [item.id, item.username]));
+        const workspaceNames = new Map(
+          workspaces.map((item) => [item.id, item.name])
+        );
+        const usernames = new Map(
+          users.map((item) => [item.id, item.username])
+        );
         response.json({
           date,
           total,
@@ -1573,20 +1612,33 @@ function systemEndpoints(app) {
               response: data?.text || "",
               sources: Array.isArray(data?.sources)
                 ? data.sources.map((source) => ({
-                    title: source?.title || source?.name || source?.source || "Fonte",
-                    type: source?.sourceType || source?.type || source?.provider || "",
+                    title:
+                      source?.title ||
+                      source?.name ||
+                      source?.source ||
+                      "Fonte",
+                    type:
+                      source?.sourceType ||
+                      source?.type ||
+                      source?.provider ||
+                      "",
                   }))
                 : [],
               duration: Number.isFinite(Number(data?.metrics?.duration))
                 ? Number(data.metrics.duration)
                 : null,
-              requestDuration: Number.isFinite(Number(data?.metrics?.requestDurationMs))
+              requestDuration: Number.isFinite(
+                Number(data?.metrics?.requestDurationMs)
+              )
                 ? Number(data.metrics.requestDurationMs) / 1000
                 : null,
               feedbackScore: chat.feedbackScore,
               createdAt: chat.createdAt,
-              workspace: workspaceNames.get(chat.workspaceId) || "Workspace removido",
-              username: usernames.get(chat.user_id) || (chat.api_session_id ? "API" : "Usuário desconhecido"),
+              workspace:
+                workspaceNames.get(chat.workspaceId) || "Workspace removido",
+              username:
+                usernames.get(chat.user_id) ||
+                (chat.api_session_id ? "API" : "Usuário desconhecido"),
             };
           }),
         });
@@ -2069,7 +2121,12 @@ function systemEndpoints(app) {
     "/system/test-sql-query",
     [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (request, response) => {
-      const { database_id, sql, parameters = [], values = {} } = reqBody(request);
+      const {
+        database_id,
+        sql,
+        parameters = [],
+        values = {},
+      } = reqBody(request);
       try {
         if (!database_id || !sql) {
           return response.status(400).json({
@@ -2089,22 +2146,22 @@ function systemEndpoints(app) {
           });
         }
 
-        const { prepareSavedQuery } = require(
-          "../utils/agents/aibitat/plugins/sql-agent/query-template"
-        );
-        const { getDBClient } = require(
-          "../utils/agents/aibitat/plugins/sql-agent/SQLConnectors"
-        );
+        const {
+          prepareSavedQuery,
+        } = require("../utils/agents/aibitat/plugins/sql-agent/query-template");
+        const {
+          getDBClient,
+        } = require("../utils/agents/aibitat/plugins/sql-agent/SQLConnectors");
         const prepared = prepareSavedQuery({
           engine: connection.engine,
           sql,
           parameters,
           values,
         });
-        const result = await getDBClient(connection.engine, connection).runQuery(
-          prepared.query,
-          prepared.params
-        );
+        const result = await getDBClient(
+          connection.engine,
+          connection
+        ).runQuery(prepared.query, prepared.params);
         if (result.error) {
           return response.status(400).json({
             success: false,
@@ -2113,15 +2170,20 @@ function systemEndpoints(app) {
         }
 
         const rows = Array.isArray(result.rows) ? result.rows : [];
-        const columns = Array.isArray(result.columns) && result.columns.length
-          ? result.columns
-          : Object.keys(rows[0] || {}).map((name) => ({
-              name,
-              type:
-                rows.find((row) => row?.[name] !== null && row?.[name] !== undefined)?.[name]?.constructor?.name ||
-                typeof rows.find((row) => row?.[name] !== null && row?.[name] !== undefined)?.[name] ||
-                "unknown",
-            }));
+        const columns =
+          Array.isArray(result.columns) && result.columns.length
+            ? result.columns
+            : Object.keys(rows[0] || {}).map((name) => ({
+                name,
+                type:
+                  rows.find(
+                    (row) => row?.[name] !== null && row?.[name] !== undefined
+                  )?.[name]?.constructor?.name ||
+                  typeof rows.find(
+                    (row) => row?.[name] !== null && row?.[name] !== undefined
+                  )?.[name] ||
+                  "unknown",
+              }));
         return response.status(200).json({
           success: true,
           columns,

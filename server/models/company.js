@@ -6,10 +6,19 @@ const Company = {
     return await prisma.companies.findMany({
       orderBy: { name: "asc" },
       include: {
-        members: { include: { user: { select: { id: true, username: true, role: true } } } },
+        members: {
+          include: {
+            user: { select: { id: true, username: true, role: true } },
+          },
+        },
         workspaces: { select: { id: true, name: true, slug: true } },
         google_drive_connections: {
-          select: { id: true, googleEmail: true, lastSyncAt: true, lastError: true },
+          select: {
+            id: true,
+            googleEmail: true,
+            lastSyncAt: true,
+            lastError: true,
+          },
         },
       },
     });
@@ -24,7 +33,8 @@ const Company = {
     if (normalizedName.length < 2 || normalizedName.length > 100)
       throw new Error("O nome da empresa deve ter de 2 a 100 caracteres.");
 
-    const baseSlug = slugify(normalizedName, { lower: true, strict: true }) || "empresa";
+    const baseSlug =
+      slugify(normalizedName, { lower: true, strict: true }) || "empresa";
     let slug = baseSlug;
     for (
       let suffix = 2;
@@ -33,7 +43,9 @@ const Company = {
     )
       slug = `${baseSlug}-${suffix}`;
 
-    return await prisma.companies.create({ data: { name: normalizedName, slug } });
+    return await prisma.companies.create({
+      data: { name: normalizedName, slug },
+    });
   },
 
   async update(id, name) {
@@ -126,7 +138,10 @@ const Company = {
       .filter((userId) => !newMemberIds.includes(userId));
 
     await prisma.$transaction(async (tx) => {
-      await tx.workspaces.update({ where: { id: workspace.id }, data: { companyId: companyId || null } });
+      await tx.workspaces.update({
+        where: { id: workspace.id },
+        data: { companyId: companyId || null },
+      });
       if (!companyId && removedIds.length)
         await tx.workspace_users.deleteMany({
           where: { workspace_id: workspace.id, user_id: { in: removedIds } },
@@ -135,7 +150,9 @@ const Company = {
         await tx.workspace_users.deleteMany({
           where: {
             workspace_id: workspace.id,
-            ...(newMemberIds.length ? { user_id: { notIn: newMemberIds } } : {}),
+            ...(newMemberIds.length
+              ? { user_id: { notIn: newMemberIds } }
+              : {}),
           },
         });
       for (const user_id of newMemberIds) {
@@ -156,10 +173,19 @@ const Company = {
     return await prisma.companies.findUnique({
       where: { id: Number(id) },
       include: {
-        members: { include: { user: { select: { id: true, username: true, role: true } } } },
+        members: {
+          include: {
+            user: { select: { id: true, username: true, role: true } },
+          },
+        },
         workspaces: { select: { id: true, name: true, slug: true } },
         google_drive_connections: {
-          select: { id: true, googleEmail: true, lastSyncAt: true, lastError: true },
+          select: {
+            id: true,
+            googleEmail: true,
+            lastSyncAt: true,
+            lastError: true,
+          },
         },
       },
     });

@@ -10,7 +10,14 @@ const cronValidate = require("cron-validate").default;
 later.date.UTC();
 
 const ScheduledJob = {
-  writable: ["name", "prompt", "tools", "schedule", "enabled", "telegramRecipientIds"],
+  writable: [
+    "name",
+    "prompt",
+    "tools",
+    "schedule",
+    "enabled",
+    "telegramRecipientIds",
+  ],
 
   /**
    * Maximum number of scheduled jobs that can be enabled at once.
@@ -55,7 +62,13 @@ const ScheduledJob = {
     }
   },
 
-  create: async function ({ name, prompt, tools = null, schedule, telegramRecipientIds = [] } = {}) {
+  create: async function ({
+    name,
+    prompt,
+    tools = null,
+    schedule,
+    telegramRecipientIds = [],
+  } = {}) {
     try {
       const nextRunAt = this.computeNextRunAt(schedule);
       const job = await prisma.scheduled_jobs.create({
@@ -81,7 +94,12 @@ const ScheduledJob = {
       for (const key of this.writable) {
         if (data.hasOwnProperty(key)) {
           if (key === "tools" || key === "telegramRecipientIds") {
-            updates[key] = data[key] == null ? (key === "tools" ? null : "[]") : JSON.stringify(data[key]);
+            updates[key] =
+              data[key] == null
+                ? key === "tools"
+                  ? null
+                  : "[]"
+                : JSON.stringify(data[key]);
           } else {
             updates[key] = data[key];
           }

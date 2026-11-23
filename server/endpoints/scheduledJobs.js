@@ -1,7 +1,10 @@
 const { ScheduledJob } = require("../models/scheduledJob");
 const { ScheduledJobRun } = require("../models/scheduledJobRun");
 const { validatedRequest } = require("../utils/middleware/validatedRequest");
-const { flexUserRoleValid, ROLES } = require("../utils/middleware/multiUserProtected");
+const {
+  flexUserRoleValid,
+  ROLES,
+} = require("../utils/middleware/multiUserProtected");
 const { User } = require("../models/user");
 const { reqBody, safeJsonParse } = require("../utils/http");
 const { BackgroundService } = require("../utils/BackgroundWorkers");
@@ -144,7 +147,13 @@ function scheduledJobEndpoints(app) {
     [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (request, response) => {
       try {
-        const { name, prompt, tools, schedule, telegramRecipientIds = [] } = reqBody(request);
+        const {
+          name,
+          prompt,
+          tools,
+          schedule,
+          telegramRecipientIds = [],
+        } = reqBody(request);
         let errorMessage = null;
 
         if (!name?.trim()) {
@@ -174,8 +183,12 @@ function scheduledJobEndpoints(app) {
           });
         }
 
-        const recipients = await validateTelegramRecipients(telegramRecipientIds);
-        if (recipients.error) return response.status(400).json({ job: null, error: recipients.error });
+        const recipients =
+          await validateTelegramRecipients(telegramRecipientIds);
+        if (recipients.error)
+          return response
+            .status(400)
+            .json({ job: null, error: recipients.error });
         const { job, error } = await ScheduledJob.create({
           name: name.trim(),
           prompt: prompt.trim(),
@@ -226,13 +239,18 @@ function scheduledJobEndpoints(app) {
     [validatedRequest, flexUserRoleValid([ROLES.admin])],
     async (request, response) => {
       try {
-        const { name, prompt, tools, schedule, enabled, telegramRecipientIds } = reqBody(request);
+        const { name, prompt, tools, schedule, enabled, telegramRecipientIds } =
+          reqBody(request);
         const updates = {};
 
         if (name !== undefined) updates.name = String(name).trim();
         if (telegramRecipientIds !== undefined) {
-          const recipients = await validateTelegramRecipients(telegramRecipientIds);
-          if (recipients.error) return response.status(400).json({ job: null, error: recipients.error });
+          const recipients =
+            await validateTelegramRecipients(telegramRecipientIds);
+          if (recipients.error)
+            return response
+              .status(400)
+              .json({ job: null, error: recipients.error });
           updates.telegramRecipientIds = recipients.ids;
         }
         if (prompt !== undefined) updates.prompt = String(prompt).trim();
@@ -384,13 +402,22 @@ function scheduledJobEndpoints(app) {
 }
 
 async function validateTelegramRecipients(value) {
-  if (!Array.isArray(value)) return { ids: [], error: "Telegram recipients must be an array." };
-  const ids = [...new Set(value.map(Number).filter((id) => Number.isInteger(id) && id > 0))];
-  if (ids.length !== value.length) return { ids: [], error: "Invalid Telegram recipient." };
+  if (!Array.isArray(value))
+    return { ids: [], error: "Telegram recipients must be an array." };
+  const ids = [
+    ...new Set(
+      value.map(Number).filter((id) => Number.isInteger(id) && id > 0)
+    ),
+  ];
+  if (ids.length !== value.length)
+    return { ids: [], error: "Invalid Telegram recipient." };
   if (!ids.length) return { ids, error: null };
   const users = await User.where({ id: { in: ids } });
   if (users.length !== ids.length || users.some((user) => !user.telegramChatId))
-    return { ids: [], error: "Every selected recipient must have Telegram linked." };
+    return {
+      ids: [],
+      error: "Every selected recipient must have Telegram linked.",
+    };
   return { ids, error: null };
 }
 

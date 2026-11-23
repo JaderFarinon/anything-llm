@@ -292,8 +292,7 @@ const Workspace = {
   },
 
   getWithUser: async function (user = null, clause = {}) {
-    if (user.role === ROLES.admin)
-      return this.get(clause);
+    if (user.role === ROLES.admin) return this.get(clause);
     if (user.role === ROLES.manager) {
       const workspace = await this.get(clause);
       if (workspace?.privateOwnerId && workspace.privateOwnerId !== user.id)
